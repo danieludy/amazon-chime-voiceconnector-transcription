@@ -60,7 +60,9 @@ Using CloudFormation template and AWS CLI:
 2. [Download](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/0.9.0/amazon-chime-voiceconnector-recordandtranscribe.zip) the release to same folder
 4. [Download](https://aws.amazon.com/cli/) and install AWS CLI if not already installed
 5. Configure AWS CLI following these [steps](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
-    -`aws configure`
+    ```
+    aws configure
+    ```
 3. Create a s3 bucket to updload the source code:
     ```
     aws s3api create-bucket --bucket <unique bucket name> --region us-east-1
