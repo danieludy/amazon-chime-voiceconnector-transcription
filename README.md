@@ -43,17 +43,36 @@ Getting started with this project is easy. The most basic use case of capturing 
 The simplest way to get started is to:
 
 1. Ensure that your Amazon Chime Voice Connector has the "Streaming" feature enabled by following the [Amazon Chime Voice Connector documentation](https://docs.aws.amazon.com/chime/xxxx) for "Enable Streaming"  
-- Create (or use an existing) S3 bucket for the audio files to be uploaded
-- 2 recording files for each call will be uploaded in S3 representing each call leg
 
-1. Create a DynamoDB table, with the "Partition Key" named `callId` and String data type along with "Sort Key" named `sequenceNumber` with Number data type
-2. [Download](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription) and deploy the pre-packaged Lambda function
+Using manual steps:
+1. Create (or use an existing) S3 bucket for the audio files to be uploaded
+    - 2 recording files for each call will be uploaded in S3 representing each call leg
+2. Create a DynamoDB table, with the "Partition Key" named `callId` and String data type along with "Sort Key" named `sequenceNumber` with Number data type
+3. [Download](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription) and deploy the pre-packaged Lambda function
     - Ensure that the lambda execution role assigned has access to the services you plan to enable
         - SQS, S3, CloudWatch, AmazonDynamoDB, AmazonTranscribe, AmazonKinesisVideoStreams
     - Set the timeout on the lambda function to the correct limit to handle the length of calls you plan on processing with this function (up to 15 min)
     - The handler for the lambda function is: `com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingLambda::handleRequest`
 - Populate the [environment variables](#Lambda Environment Variables) with the correct details for your solution
 
+Using CloudFormation template and AWS CLI:
+1. [Download](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/blob/master/infrastructure/deployment-template.json) the cloudformation template to a local folder
+2. [Download](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/0.9.0/amazon-chime-voiceconnector-recordandtranscribe.zip) the release to same folder
+4. [Download](https://aws.amazon.com/cli/) and install AWS CLI if not already installed
+5. Configure AWS CLI following these [steps](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
+    -`aws configure`
+3. Create a s3 bucket to updload the source code:
+    ```
+    aws s3api create-bucket --bucket <unique bucket name> --region us-east-1
+    ```
+4. Create deployment package using local artifacts:
+    ```
+    aws cloudformation package --template-file ./deployment-template.json --s3-bucket <bucket name from previous step> --force-upload --use-json --output-template-file packaged.json
+    ```
+5. Deploy package:
+    ```    
+    aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1
+    ```
 
 ### Building the project
 The lambda code is designed to be built with Gradle. All requisite dependencies are captured in the `build.gradle` file. The code also depends on the [AWS Kinesis Video Streams Parser Library](https://github.com/aws/amazon-kinesis-video-streams-parser-library) which has been built into a jar can be found in the jars folder. Simply use `gradle build` to build the zip that can be deployed as an AWS Lambda application.
