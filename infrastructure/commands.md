@@ -60,7 +60,7 @@ aws configure
 
 Create S3 bucket to upload the lambda code
 ```
-aws s3api create-bucket --bucket source-us-east-1-<accountid> --region us-east-1 --create-bucket-configuration LocationConstraint=us-west-1
+aws s3api create-bucket --bucket source-us-east-1-<accountid> --region us-east-1
 ```
 
 Package local artifacts
