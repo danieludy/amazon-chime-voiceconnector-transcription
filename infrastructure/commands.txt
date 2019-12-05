@@ -1,0 +1,29 @@
+#Create a directory
+mkdir test
+cd test
+
+Windows
+#Download the sample and cloud formation template
+powershell -command "& { iwr https://raw.githubusercontent.com/aws-samples/amazon-chime-voiceconnector-transcription/master/infrastructure/deployment-template.json -OutFile deployment-template.json }"
+powershell -command "& { iwr https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/0.9.0/amazon-chime-voiceconnector-recordandtranscribe.zip -OutFile amazon-chime-voiceconnector-recordandtranscribe.zip }"
+
+MAC
+#Install brew
+/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+
+#Install wget
+brew install curl
+
+#Download the sample and cloud formation template
+wget https://raw.githubusercontent.com/aws-samples/amazon-chime-voiceconnector-transcription/master/infrastructure/deployment-template.json
+wget https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/0.9.0/amazon-chime-voiceconnector-recordandtranscribe.zip
+
+
+#Configure AWSCLI
+aws configure
+
+#Deploy Sample
+aws s3api create-bucket --bucket source-us-east-1-<accountid> --region us-east-1
+aws cloudformation package --template-file ./deployment-template.json --s3-bucket <bucket name from previous step> --force-upload --use-json --output-template-file packaged.json
+aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1
+
