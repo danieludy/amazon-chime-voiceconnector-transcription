@@ -42,7 +42,7 @@ wget https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/re
 ```
 > Missing Wget? Install using [brew](https://brew.sh/)
 >```
->brew install curl
+>brew install wget
 >```
 >> Missing brew?
 >>```ruby
