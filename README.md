@@ -22,6 +22,7 @@ This solution can be configured using the following services: [Amazon Chime](htt
 With [Amazon Chime](https://aws.amazon.com/chime/) Voice Connector, customer audio can be live streamed to Kinesis Video Streams as described in this [Amazon Chime documentation] (https://docs.aws.amazon.com/chime). This project serves as an example of how to consume an Amazon Chime Voice Connector live audio stream, capture the audio and send it to S3 in the form of an audio wav file, as well as perform real-time transcription using [Amazon Transcribe](https://aws.amazon.com/transcribe) and posting those transcriptions to a DynamoDB table. 
 
 In the diagram above:
+
 - (Step 1) Configure Voice Connector to stream the real-time audio of Voice Connector SIP trunk calls or SIP-based Media Recording (SIPREC) media streams from your on-premises Session Border Controller (SBC), Private Branch Exchange (PBX), or Contact Center
 - (Step 2) In the Amazon Chime Voice Connector configuration page in the AWS Chime Console
     - Ensure "start" is selected in the Streaming tab next to "Send to Kinesis Video Streams"
@@ -36,59 +37,58 @@ The Lambda code expects the Kinesis Video Stream details provided by the Amazon 
 As of this writing Amazon Transcribe supports real time transcription of British English (en-GB), US English (en-US), French (fr-FR), Canadian French (fr-CA); and US Spanish (es-US). See the Amazon Transcribe [streaming documentation](https://docs.aws.amazon.com/transcribe/latest/dg/streaming.html) for the latest supported languages.
 
 ## Getting Started
-Getting started with this project is easy. The most basic use case of capturing audio in the Amazon Chime Voice Connector can be accomplished by downloading the pre-packaged Lambda Function, deploying it in your account, giving it the correct permissions to access S3 and KVS, and then invoking it and passing the details in the invocation event.
+Getting started with this project is easy. The most basic use case of capturing audio in the Amazon Chime Voice Connector can be accomplished by using the CloudFormation template deployment instructions below:
 
 ### Easy Setup
 
-The simplest way to get started is to:
+The simplest way to get started is to use the Amazon CloudFormation template instructions below to deploy resources required.  With both options you must ensure that you have an active Amazon Chime Voice Connector with the "Streaming" feature enabled by following the [Amazon Chime Voice Connector documentation](https://docs.aws.amazon.com/chime/latest/ag/start-kinesis-vc.html) for "Enable Streaming".
+Once your deployment is complete, you can test by making calls through your Amazon Chime Voice Connector and verifying the transcribed segments are populated in the Amazon DynamoDB table and the Amazon S3 bucket contains the recordings.  
 
-1. Ensure that your Amazon Chime Voice Connector has the "Streaming" feature enabled by following the [Amazon Chime Voice Connector documentation](https://docs.aws.amazon.com/chime/xxxx) for "Enable Streaming"  
 
-Using manual steps:
-1. Create (or use an existing) S3 bucket for the audio files to be uploaded
-    - 2 recording files for each call will be uploaded in S3 representing each call leg
-2. Create a DynamoDB table, with the "Partition Key" named `callId` and String data type along with "Sort Key" named `sequenceNumber` with Number data type
-3. [Download](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription) and deploy the pre-packaged Lambda function
-    - Ensure that the lambda execution role assigned has access to the services you plan to enable
-        - SQS, S3, CloudWatch, AmazonDynamoDB, AmazonTranscribe, AmazonKinesisVideoStreams
-    - Set the timeout on the lambda function to the correct limit to handle the length of calls you plan on processing with this function (up to 15 min)
-    - The handler for the lambda function is: `com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingLambda::handleRequest`
-- Populate the [environment variables](#Lambda Environment Variables) with the correct details for your solution
+### Building the project with automated deployment:
+Amazon CloudFormation deployment instructions:
 
-Using CloudFormation template and AWS CLI:
 1. [Download](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/blob/master/infrastructure/deployment-template.json) the cloudformation template to a local folder
 2. [Download](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/0.9.0/amazon-chime-voiceconnector-recordandtranscribe.zip) the release to same folder
-4. [Download](https://aws.amazon.com/cli/) and install AWS CLI if not already installed
-5. Configure AWS CLI following these [steps](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
+3. [Download](https://aws.amazon.com/cli/) and install AWS CLI if not already installed
+4. Configure AWS CLI following these [steps](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
     ```
     aws configure
     ```
-3. Create a s3 bucket to updload the source code:
+5. Create a s3 bucket to upload the source code:
     ```
     aws s3api create-bucket --bucket <unique bucket name> --region us-east-1
     ```
-4. Create deployment package using local artifacts:
+6. Create deployment package using local artifacts:
     ```
     aws cloudformation package --template-file ./deployment-template.json --s3-bucket <bucket name from previous step> --force-upload --use-json --output-template-file packaged.json
     ```
-5. Deploy package:
+7. Deploy package:
     ```    
-    aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1
+    aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1  
     ```
+8. Place test calls through Amazon Voice Connector and view transcripts in DynamoDB and recordings in S3.
 
-### Building the project
+### Building the project with manual deployment:
+You can alternatively follow manual steps below to deploy. This is accomplished by downloading the pre-packaged Lambda Function, deploying it in your account, giving it the correct permissions to access S3 and KVS, and then invoking it and passing the details in the invocation event.
+
 The lambda code is designed to be built with Gradle. All requisite dependencies are captured in the `build.gradle` file. The code also depends on the [AWS Kinesis Video Streams Parser Library](https://github.com/aws/amazon-kinesis-video-streams-parser-library) which has been built into a jar can be found in the jars folder. Simply use `gradle build` to build the zip that can be deployed as an AWS Lambda application.
 
-### Requirements
-1. Create a table in DynamoDB with name "TranscriptionsData" with partition key as "CallId" of type String and sort key as "SequenceNumber" of type Number.  Transcriptions will be stored in this table.
+### Requirements for manual option:
+1. Create a table in DynamoDB with name "TranscriptionsData", partition key as "CallId" of type String and sort key as "SequenceNumber" of type Number.  Transcriptions will be stored in this table.
 2. Create SQS queue for which above created Lambda would poll for messages.
 3. Create Lambda IAM role which has write permission to S3, DynamoDB, Transcribe, CloudWatch. It should also have read permission to SQS and Kinesis Video Streams.
-4. Create the lambda function choosing Java 8 and upload the zip AWSVoiceConnectorToTranscribeLambda.zip package from the build folder that was built with Gradle above.
+4. Create the lambda function choosing Java 11 and upload the zip AWSVoiceConnectorToTranscribeLambda.zip package from the build folder that was built with Gradle above.
+  - Ensure that the lambda execution role assigned has access to the services you plan to enable SQS, S3, CloudWatch, AmazonDynamoDB, AmazonTranscribe, AmazonKinesisVideoStreams
+  - Set the timeout on the lambda function to the correct limit to handle the length of calls you plan on processing with this function (up to 15 min)
+  - The handler for the lambda function is: `com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingLambda::handleRequest`
+  - Populate the [environment variables](#Lambda Environment Variables) with the correct details for your solution
 5. Create a CloudWatch event rule which gets triggered when Streaming to Kinesis starts and has target set to SQS queue created in previous step.
 6. Create S3 bucket where call recordings will be stored and configure Lambda to use the same bucket by setting system variable `RECORDINGS_BUCKET_NAME`.
+7. Place test calls through Amazon Voice Connector and view transcripts in DynamoDB and recordings in S3. 
 
 
-## SQS Queue
+#### SQS Queue for manual option
 See [Creating an Amazon SQS Queue](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-create-queue.html) for creating via console
 
 If using the AWS CLI:
@@ -106,7 +106,7 @@ aws lambda create-event-source-mapping \
  --event-source-arn arn:aws:sqs:us-east-1:123456789012:ChimeVoiceConnectorStreaming
 ```
 
-## CloudWatch Event Rule 
+#### CloudWatch Event Rule for manual option
 See [Create CloudWatch Events Rule](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/Create-CloudWatch-Events-Rule.html) for creating via console.
 
 If using AWS CLI:
