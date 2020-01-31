@@ -2,6 +2,8 @@ package com.amazonaws.kvstranscribestreaming;
 
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
+import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
+import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +35,7 @@ import java.util.List;
 public class TranscribedSegmentWriter {
 
     private String contactId;
+    private String speakerLabel;
     private DynamoDB ddbClient;
     private Boolean consoleLogTranscriptFlag;
     private static final String TABLE_TRANSCRIPT = "TranscriptSegment";
@@ -43,11 +46,23 @@ public class TranscribedSegmentWriter {
         this.contactId = Validate.notNull(contactId);
         this.ddbClient = Validate.notNull(ddbClient);
         this.consoleLogTranscriptFlag = Validate.notNull(consoleLogTranscriptFlag);
+
+        // initialize it to null so it's set on the first write
+        // TODO:  this is a race condition nightmare so use the leg attribute once it's available
+        this.speakerLabel = null;
     }
 
     public String getContactId() {
 
         return this.contactId;
+    }
+
+    public String getSpeakerLabel() {
+
+        if (this.speakerLabel == null) {
+            this.speakerLabel = initSpeakerLabel();
+        }
+        return this.speakerLabel;
     }
 
     public DynamoDB getDdbClient() {
@@ -103,6 +118,26 @@ public class TranscribedSegmentWriter {
         }
     }
 
+    private String initSpeakerLabel() {
+
+        // assume that the first speaker is spk_0 and all others are spk_1
+        // TODO:  if we need to be more precise, use the stream ARN to determine how many speakers for a given CallId
+        String speaker = "spk_0";
+
+        QuerySpec spec = new QuerySpec()
+            .withMaxResultSize(1)
+            .withKeyConditionExpression("CallId = :c_id")
+            .withValueMap(new ValueMap().withString(":c_id", getContactId()));
+
+        if (getDdbClient().getTable(TABLE_TRANSCRIPT).query(spec).iterator().hasNext()) {
+
+            speaker = "spk_1";
+        }
+        logger.info(String.format("Speaker label was assumed to be %s for %s", speaker, getContactId()));
+
+        return speaker;
+    }
+
     private Item toDynamoDbItem(Result result) {
 
         String contactId = this.getContactId();
@@ -116,6 +151,7 @@ public class TranscribedSegmentWriter {
                 ddbItem = new Item()
                         .withKeyComponent("CallId", contactId)
                         .withKeyComponent("StartTime", result.startTime())
+                        .withString("Speaker", getSpeakerLabel())
                         .withDouble("EndTime", result.endTime())
                         .withString("SegmentId", result.resultId())
                         .withString("Transcript", result.alternatives().get(0).transcript())
@@ -130,11 +166,12 @@ public class TranscribedSegmentWriter {
                     nf.setMinimumFractionDigits(3);
                     nf.setMaximumFractionDigits(3);
 
-                    logger.info(String.format("Thread %s %d: [%s, %s] - %s",
+                    logger.info(String.format("Thread %s %d: [%s, %s] %s - %s",
                             Thread.currentThread().getName(),
                             System.currentTimeMillis(),
                             nf.format(result.startTime()),
                             nf.format(result.endTime()),
+                            getSpeakerLabel(),
                             result.alternatives().get(0).transcript()));
                 }
             }
