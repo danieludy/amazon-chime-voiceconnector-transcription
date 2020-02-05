@@ -1,9 +1,9 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Transform": "AWS::Serverless-2016-10-31",
-    "Description": "Create Lambda to Save Audio Stream in S3",
+    "Description": "Resources to process Chime Voice Connector audio from KVS, transcribe, and save output to DynamoDB table",
     "Resources": {
-        "RecodingBucket": {
+        "RecordingBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
@@ -29,7 +29,7 @@
                         "AttributeType": "S"
                     },
                     {
-                        "AttributeName": "SequenceNumber",
+                        "AttributeName": "StartTime",
                         "AttributeType": "N"
                     }
                 ],
@@ -39,7 +39,7 @@
                         "KeyType": "HASH"
                     },
                     {
-                        "AttributeName": "SequenceNumber",
+                        "AttributeName": "StartTime",
                         "KeyType": "RANGE"
                     }
                 ],
@@ -47,7 +47,7 @@
                     "ReadCapacityUnits": "5",
                     "WriteCapacityUnits": "5"
                 },
-                "TableName": "TranscriptionsData"
+                "TableName": "TranscriptSegment"
             }
         },
         "EventSQS": {
@@ -159,7 +159,7 @@
                                     ],
                                     "Resource": {
                                         "Fn::GetAtt": [
-                                            "RecodingBucket",
+                                            "RecordingBucket",
                                             "Arn"
                                         ]
                                     }
@@ -174,7 +174,7 @@
                                     "Resource": {
                                         "Fn::Join": [ "", [
                                             "arn:aws:s3:::", {
-                                              "Ref": "RecodingBucket"
+                                              "Ref": "RecordingBucket"
                                             },
                                             "/*"
                                           ]
@@ -226,7 +226,7 @@
                     "Variables": {
                         "IS_TRANSCRIBE_ENABLED": "true",
                         "RECORDINGS_BUCKET_NAME": {
-                            "Ref": "RecodingBucket"
+                            "Ref": "RecordingBucket"
                         }
                     }
                 },

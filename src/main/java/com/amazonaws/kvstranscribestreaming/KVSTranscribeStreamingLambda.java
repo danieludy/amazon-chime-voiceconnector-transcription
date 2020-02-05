@@ -201,7 +201,7 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
             }
         } else {
             try {
-                logger.info("Transcibe is not enabled. Saving audio bytes to location");
+                logger.info("Transcribe is not enabled; saving audio bytes to location");
 
                 // Write audio bytes from the KVS stream to the temporary file
                 ByteBuffer audioBuffer = KVSUtils.getByteBufferFromStream(streamingMkvReader, fragmentVisitor,

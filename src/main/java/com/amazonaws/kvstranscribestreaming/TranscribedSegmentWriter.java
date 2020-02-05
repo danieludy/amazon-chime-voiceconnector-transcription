@@ -2,6 +2,8 @@ package com.amazonaws.kvstranscribestreaming;
 
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
+import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
+import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +11,7 @@ import software.amazon.awssdk.services.transcribestreaming.model.Result;
 import software.amazon.awssdk.services.transcribestreaming.model.TranscriptEvent;
 
 import java.text.NumberFormat;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -32,10 +35,10 @@ import java.util.List;
 public class TranscribedSegmentWriter {
 
     private String contactId;
+    private String speakerLabel;
     private DynamoDB ddbClient;
     private Boolean consoleLogTranscriptFlag;
-    private int sequenceNumber = 0;
-    private static final String TABLE_CALLER_TRANSCRIPT = "TranscriptionsData";
+    private static final String TABLE_TRANSCRIPT = "TranscriptSegment";
     private static final Logger logger = LoggerFactory.getLogger(TranscribedSegmentWriter.class);
 
     public TranscribedSegmentWriter(String contactId, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag) {
@@ -43,11 +46,23 @@ public class TranscribedSegmentWriter {
         this.contactId = Validate.notNull(contactId);
         this.ddbClient = Validate.notNull(ddbClient);
         this.consoleLogTranscriptFlag = Validate.notNull(consoleLogTranscriptFlag);
+
+        // initialize it to null so it's set on the first write
+        // TODO:  this is a race condition nightmare so use the leg attribute once it's available
+        this.speakerLabel = null;
     }
 
     public String getContactId() {
 
         return this.contactId;
+    }
+
+    public String getSpeakerLabel() {
+
+        if (this.speakerLabel == null) {
+            this.speakerLabel = initSpeakerLabel();
+        }
+        return this.speakerLabel;
     }
 
     public DynamoDB getDdbClient() {
@@ -62,11 +77,12 @@ public class TranscribedSegmentWriter {
 
             Result result = results.get(0);
 
+            // we're only saving final transcripts here (note:  this will make the Ux appear slower)
             if (!result.isPartial()) {
                 try {
                     Item ddbItem = toDynamoDbItem(result);
                     if (ddbItem != null) {
-                        getDdbClient().getTable(TABLE_CALLER_TRANSCRIPT).putItem(ddbItem);
+                        getDdbClient().getTable(TABLE_TRANSCRIPT).putItem(ddbItem);
                     }
 
                 } catch (Exception e) {
@@ -82,21 +98,44 @@ public class TranscribedSegmentWriter {
      */
     public void writeTranscribeDoneToDynamoDB()
     {
+        Instant now = Instant.now();
         logger.info("writing end of transcription to DDB for " + contactId);
         Item ddbItem = new Item()
             .withKeyComponent("CallId", contactId)
-            .withKeyComponent("SequenceNumber", ++sequenceNumber)
-            .withString("TranscribedStream", "END_OF_TRANSCRIPTION")
+            .withKeyComponent("StartTime", now.getEpochSecond())
+            .withString("Transcript", "END_OF_TRANSCRIPTION")
+            // LoggedOn is an ISO-8601 string representation of when the entry was created
+            .withString("LoggedOn", now.toString())
             .withBoolean("IsPartial", Boolean.FALSE)
             .withBoolean("IsFinal", Boolean.TRUE);
         
         if (ddbItem != null) {
             try {
-                getDdbClient().getTable(TABLE_CALLER_TRANSCRIPT).putItem(ddbItem);
+                getDdbClient().getTable(TABLE_TRANSCRIPT).putItem(ddbItem);
             } catch (Exception e) {
                 logger.error("Exception while writing to DDB:", e);
             }
         }
+    }
+
+    private String initSpeakerLabel() {
+
+        // assume that the first speaker is spk_0 and all others are spk_1
+        // TODO:  if we need to be more precise, use the stream ARN to determine how many speakers for a given CallId
+        String speaker = "spk_0";
+
+        QuerySpec spec = new QuerySpec()
+            .withMaxResultSize(1)
+            .withKeyConditionExpression("CallId = :c_id")
+            .withValueMap(new ValueMap().withString(":c_id", getContactId()));
+
+        if (getDdbClient().getTable(TABLE_TRANSCRIPT).query(spec).iterator().hasNext()) {
+
+            speaker = "spk_1";
+        }
+        logger.info(String.format("Speaker label was assumed to be %s for %s", speaker, getContactId()));
+
+        return speaker;
     }
 
     private Item toDynamoDbItem(Result result) {
@@ -104,26 +143,35 @@ public class TranscribedSegmentWriter {
         String contactId = this.getContactId();
         Item ddbItem = null;
 
-        NumberFormat nf = NumberFormat.getInstance();
-        nf.setMinimumFractionDigits(3);
-        nf.setMaximumFractionDigits(3);
+        Instant now = Instant.now();
 
         if (result.alternatives().size() > 0) {
             if (!result.alternatives().get(0).transcript().isEmpty()) {
 
                 ddbItem = new Item()
                         .withKeyComponent("CallId", contactId)
-                        .withKeyComponent("SequenceNumber", ++sequenceNumber)
-                        .withString("TranscribedStream", result.alternatives().get(0).transcript())
+                        .withKeyComponent("StartTime", result.startTime())
+                        .withString("Speaker", getSpeakerLabel())
+                        .withDouble("EndTime", result.endTime())
+                        .withString("SegmentId", result.resultId())
+                        .withString("Transcript", result.alternatives().get(0).transcript())
+                        // LoggedOn is an ISO-8601 string representation of when the entry was created
+                        .withString("LoggedOn", now.toString())
                         .withBoolean("IsPartial", result.isPartial())
                         .withBoolean("IsFinal", Boolean.FALSE);
 
                 if (consoleLogTranscriptFlag) {
-                    logger.info(String.format("Thread %s %d: [%s, %s] - %s",
+
+                    NumberFormat nf = NumberFormat.getInstance();
+                    nf.setMinimumFractionDigits(3);
+                    nf.setMaximumFractionDigits(3);
+
+                    logger.info(String.format("Thread %s %d: [%s, %s] %s - %s",
                             Thread.currentThread().getName(),
                             System.currentTimeMillis(),
                             nf.format(result.startTime()),
                             nf.format(result.endTime()),
+                            getSpeakerLabel(),
                             result.alternatives().get(0).transcript()));
                 }
             }
