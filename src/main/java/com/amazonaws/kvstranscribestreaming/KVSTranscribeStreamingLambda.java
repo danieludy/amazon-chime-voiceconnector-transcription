@@ -186,9 +186,9 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
                                 fragmentVisitor, shouldWriteAudioToFile),
                         new StreamTranscriptionBehaviorImpl(segmentWriter));
 
-                result.get(600, TimeUnit.SECONDS);
+                result.get(900, TimeUnit.SECONDS);
             } catch (TimeoutException e) {
-                logger.debug("Timing out KVS to Transcribe Streaming after 600 sec");
+                logger.debug("Timing out KVS to Transcribe Streaming after 900 sec");
 
             } catch (Exception e) {
                 logger.error("Error during streaming: ", e);
