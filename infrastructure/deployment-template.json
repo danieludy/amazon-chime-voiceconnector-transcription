@@ -1,257 +1,794 @@
 {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Transform": "AWS::Serverless-2016-10-31",
-    "Description": "Resources to process Chime Voice Connector audio from KVS, transcribe, and save output to DynamoDB table",
-    "Resources": {
-        "RecordingBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "callrecordings-${AWS::Region}-${AWS::AccountId}"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "TranscriptionTable": {
-            "Type": "AWS::DynamoDB::Table",
-            "Properties": {
-                "AttributeDefinitions": [
-                    {
-                        "AttributeName": "TransactionId",
-                        "AttributeType": "S"
-                    },
-                    {
-                        "AttributeName": "StartTime",
-                        "AttributeType": "N"
-                    }
-                ],
-                "KeySchema": [
-                    {
-                        "AttributeName": "TransactionId",
-                        "KeyType": "HASH"
-                    },
-                    {
-                        "AttributeName": "StartTime",
-                        "KeyType": "RANGE"
-                    }
-                ],
-                "ProvisionedThroughput": {
-                    "ReadCapacityUnits": "5",
-                    "WriteCapacityUnits": "5"
-                },
-                "TableName": "TranscriptSegment"
-            }
-        },
-        "EventSQS": {
-            "Type": "AWS::SQS::Queue",
-            "Properties": {
-                "QueueName": "ChimeVoiceConnectorStreaming",
-                "VisibilityTimeout": 1800
-            }
-        },
-        "SendEventToSQSRule": {
-            "Type": "AWS::Events::Rule",
-            "Properties": {
-                "EventPattern": {
-                    "source": [
-                        "aws.chime"
-                    ],
-                    "detail-type": [
-                        "Chime VoiceConnector Streaming Status"
-                    ]
-                },
-                "Targets": [
-                    {
-                        "Id": 1,
-                        "Arn": {
-                            "Fn::GetAtt": [
-                                "EventSQS",
-                                "Arn"
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "EventSQSSendEventPolicy": {
-            "Type": "AWS::SQS::QueuePolicy",
-            "Properties": {
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Id": "GrantSendEventPermission",
-                    "Statement": [
-                        {
-                            "Sid": "1",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": [
-                                    "events.amazonaws.com"
-                                ]
-                            },
-                            "Action": [
-                                "sqs:SendMessage"
-                            ],
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "EventSQS",
-                                    "Arn"
-                                ]
-                            },
-                            "Condition": {
-                                "ArnEquals": {
-                                    "AWS:SourceArn": {
-                                        "Fn::GetAtt": [
-                                            "SendEventToSQSRule",
-                                            "Arn"
-                                        ]
-                                    }
-                                }
-                            }
-                        }
-                    ]
-                },
-                "Queues": [
-                    {
-                        "Ref": "EventSQS"
-                    }
-                ]
-            }
-        },
-        "LambdaRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole",
-                    "arn:aws:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess",
-                    "arn:aws:iam::aws:policy/AmazonTranscribeFullAccess"
-                ],
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "sts:AssumeRole"
-                            ],
-                            "Principal": {
-                                "Service": [
-                                    "lambda.amazonaws.com"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "inline",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:ListBucket"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "RecordingBucket",
-                                            "Arn"
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:PutObject",
-                                        "s3:GetObject",
-                                        "s3:DeleteObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Join": [ "", [
-                                            "arn:aws:s3:::", {
-                                              "Ref": "RecordingBucket"
-                                            },
-                                            "/*"
-                                          ]
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "dynamodb:*"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "TranscriptionTable",
-                                            "Arn"
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "cloudwatch:Put*",
-                                        "cloudwatch:Get*",
-                                        "cloudwatch:List*"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "MainLambdaFunction": {
-            "Type": "AWS::Serverless::Function",
-            "Properties": {
-                "AutoPublishAlias": "Provisioned",
-                "MemorySize": 1024,
-                "Timeout": 900,
-                "Handler": "com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingLambda::handleRequest",
-                "Runtime": "java11",
-                "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "LambdaRole",
-                        "Arn"
-                    ]
-                },
-                "Environment": {
-                    "Variables": {
-                        "IS_TRANSCRIBE_ENABLED": "true",
-                        "RECORDINGS_BUCKET_NAME": {
-                            "Ref": "RecordingBucket"
-                        }
-                    }
-                },
-                "Events": {
-                    "EventQueue": {
-                        "Type": "SQS",
-                        "Properties": {
-                            "Queue": {
-                                "Fn::GetAtt": [
-                                    "EventSQS",
-                                    "Arn"
-                                ]
-                            },
-                            "BatchSize": 1
-                        }
-                    }
-                },
-                "ProvisionedConcurrencyConfig" : {
-                    "ProvisionedConcurrentExecutions" : 2
-                }
-            }
-        }
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "Resources to process Chime Voice Connector audio from KVS, transcribe, and save output to DynamoDB table",
+  "Parameters": {
+    "SolutionType": {
+      "Description": "The type of solution to do transcription",
+      "Type": "String",
+      "Default": "ECS",
+      "AllowedValues": ["ECS", "LAMBDA"]
+    },
+    "DockerImage": {
+      "Description": "The name of image in ECR",
+      "Type": "String",
+      "Default": ""
+    },
+    "KeyPairName": {
+      "Description": "The name of KeyPair which is used to ssh into EC2 instance",
+      "Type": "String",
+      "Default": ""
     }
+  },
+  "Conditions": {
+    "HasKeyName": {
+      "Fn::Not": [{
+        "Fn::Equals": ["", {"Ref": "KeyPairName"}]
+      }]
+    },
+    "CreateLambda": {
+      "Fn::Equals": ["LAMBDA", {"Ref": "SolutionType"}]
+    },
+    "CreateECS": {
+      "Fn::Equals": ["ECS", {"Ref": "SolutionType"}]
+    }
+  },
+  "Resources": {
+    "RecordingBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "callrecordings-${AWS::Region}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "TranscriptionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "TransactionId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "StartTime",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "TransactionId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "StartTime",
+            "KeyType": "RANGE"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": "5",
+          "WriteCapacityUnits": "5"
+        },
+        "TableName": "TranscriptSegment",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_IMAGE"
+        }
+      }
+    },
+    "EventSQS": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": "ChimeVoiceConnectorStreaming",
+        "VisibilityTimeout": 1800
+      }
+    },
+    "SendEventToSQSRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "EventPattern": {
+          "source": [
+            "aws.chime"
+          ],
+          "detail-type": [
+            "Chime VoiceConnector Streaming Status"
+          ]
+        },
+        "Targets": [
+          {
+            "Id": 1,
+            "Arn": {
+              "Fn::GetAtt": [
+                "EventSQS",
+                "Arn"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EventSQSSendEventPolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Id": "GrantSendEventPermission",
+          "Statement": [
+            {
+              "Sid": "1",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "events.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sqs:SendMessage"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "EventSQS",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::GetAtt": [
+                      "SendEventToSQSRule",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Queues": [
+          {
+            "Ref": "EventSQS"
+          }
+        ]
+      }
+    },
+    "TranscribeTaskCluster": {
+      "Condition": "CreateECS",
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": "transcribe-task-cluster"
+      }
+    },
+    "TranscribeTaskLogGroup": {
+      "Condition": "CreateECS",
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/ecs/transcribe-task-${AWS::Region}-${AWS::AccountId}"
+        },
+        "RetentionInDays": 180
+      }
+    },
+    "TranscribeImageRepository": {
+      "Condition": "CreateECS",
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": "chime-transcribe"
+      }
+    },
+    "TranscribeTaskDefinition": {
+      "Condition": "CreateECS",
+      "DependsOn": ["TranscribeTaskLogGroup"],
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "ContainerDefinitions": [
+          {
+            "EntryPoint": ["java","-cp",".:/tmp/chime-streaming-transcribe/lib/*","com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingDocker"],
+            "Image": {
+              "Ref": "DockerImage"
+            },
+            "WorkingDirectory": "/tmp/chime-streaming-transcribe/",
+            "Memory": "1024",
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "TranscribeTaskLogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "ecs"
+              }
+            },
+            "Name": "transcribe-container"
+          }
+        ],
+        "Cpu": "2048",
+        "Memory": "2048",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": ["TranscribeTaskExecutionRole", "Arn"]
+        },
+        "NetworkMode": "host",
+        "TaskRoleArn": {
+          "Fn::GetAtt": ["TranscribeTaskExecutionRole", "Arn"]
+        }
+      }
+    },
+    "TranscribeTaskExecutionRole": {
+      "Condition": "CreateECS",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess",
+          "arn:aws:iam::aws:policy/AmazonTranscribeFullAccess",
+          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "inline",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "RecordingBucket",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [ "", [
+                      "arn:aws:s3:::", {
+                        "Ref": "RecordingBucket"
+                      },
+                      "/*"
+                    ]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:*"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TranscriptionTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:Put*",
+                    "cloudwatch:Get*",
+                    "cloudwatch:List*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "Type": "AWS::IAM::Role"
+    },
+    "SendRunTaskRequestExecutionRole": {
+      "Condition": "CreateECS",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/AmazonECS_FullAccess",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
+        ]
+      },
+      "Type": "AWS::IAM::Role"
+    },
+    "SendRunTaskRequestLambdaFunctionVersion": {
+      "Condition": "CreateECS",
+      "Type": "AWS::Lambda::Version",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SendRunTaskRequestLambdaFunction"
+        },
+        "ProvisionedConcurrencyConfig": {
+          "ProvisionedConcurrentExecutions": 2
+        }
+      }
+    },
+    "SendRunTaskRequestLambdaFunction": {
+      "Condition": "CreateECS",
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "ZipFile": { "Fn::Join": ["\n", [
+                  "const AWS = require('aws-sdk');",
+                  "exports.handler = async (event, context) => {",
+                  "  const { RUNNER, IS_TRANSCRIBE_ENABLED, RECORDINGS_BUCKET_NAME, REGION, CLUSTER_NAME, CONTAINER_NAME } = process.env;",
+                  "  const resp = {",
+                  "    'statusCode': '200',",
+                  "    'body': JSON.stringify('success')",
+                  "  };",
+                  "  if(event.Records.length === 0) {",
+                  "    resp.body = JSON.stringify('Record length is 0');",
+                  "    return resp;",
+                  "  }",
+                  "  const detail = JSON.parse(event.Records[0].body).detail;",
+                  "  console.log(JSON.stringify(detail));",
+                  "  if(detail.streamingStatus === 'STARTED') {",
+                  "    const runParams = {",
+                  "      taskDefinition: RUNNER,",
+                  "      launchType: 'EC2',",
+                  "      cluster: CLUSTER_NAME,",
+                  "      overrides: {",
+                  "        containerOverrides: [",
+                  "          {",
+                  "            command: [",
+                  "              '-a',",
+                  "              detail.streamArn,",
+                  "              '-f',",
+                  "              detail.startFragmentNumber,",
+                  "              '-i',",
+                  "              detail.transactionId,",
+                  "              '-c',",
+                  "              detail.callId,",
+                  "              '-s',",
+                  "              detail.streamingStatus,",
+                  "              '-t',",
+                  "              detail.startTime",
+                  "            ],",
+                  "            environment: [",
+                  "              {",
+                  "                name: 'IS_TRANSCRIBE_ENABLED',",
+                  "                value: IS_TRANSCRIBE_ENABLED",
+                  "              },",
+                  "              {",
+                  "                name: 'RECORDINGS_BUCKET_NAME',",
+                  "                value: RECORDINGS_BUCKET_NAME",
+                  "              },",
+                  "              {",
+                  "                name: 'AWS_REGION',",
+                  "                value: REGION",
+                  "              }",
+                  "            ],",
+                  "            name: CONTAINER_NAME",
+                  "          },",
+                  "        ],",
+                  "      },",
+                  "    };",
+                  "    console.log('run parameter ',JSON.stringify(runParams));",
+                  "    const result = await new AWS.ECS().runTask(runParams).promise();",
+                  "    resp.body = JSON.stringify(result);",
+                  "  }",
+                  "  return resp;",
+                  "};"
+              ]]}
+        },
+        "Environment": {
+          "Variables": {
+            "CLUSTER_NAME": {
+              "Ref": "TranscribeTaskCluster"
+            },
+            "IS_TRANSCRIBE_ENABLED": "true",
+            "RECORDINGS_BUCKET_NAME": {
+              "Ref": "RecordingBucket"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            },
+            "RUNNER": {
+              "Ref": "TranscribeTaskDefinition"
+            },
+            "CONTAINER_NAME": "transcribe-container"
+          }
+        },
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "SendRunTaskRequestExecutionRole",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs12.x",
+        "Timeout": 3
+      }
+    },
+    "SendRunTaskRequestLambdaEventMapping": {
+      "Condition": "CreateECS",
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+          "Enabled": true,
+          "EventSourceArn": {
+            "Fn::GetAtt": [
+              "EventSQS",
+              "Arn"
+            ]
+          },
+          "FunctionName": {
+            "Fn::Join": [":", [ { "Fn::GetAtt": [ "SendRunTaskRequestLambdaFunction", "Arn"] }, "1"]]
+          }
+      }
+    },
+    "Vpc": {
+      "Condition": "CreateECS",
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true"
+      }
+    },
+    "PubSubnetAz": {
+      "Condition": "CreateECS",
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.0.0.0/24",
+        "AvailabilityZone": {
+          "Fn::Sub": "${AWS::Region}a"
+        },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "InternetGateway": {
+      "Condition": "CreateECS",
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "AttachGateway": {
+      "Condition": "CreateECS",
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "RouteViaIgw": {
+      "Condition": "CreateECS",
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "PublicRouteViaIgw": {
+      "Condition": "CreateECS",
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteViaIgw"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PubSubnetRouteTableAssociation": {
+      "Condition": "CreateECS",
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PubSubnetAz"
+        },
+        "RouteTableId": {
+          "Ref": "RouteViaIgw"
+        }
+      }
+    },
+    "EcsSecurityGroup": {
+      "Condition": "CreateECS",
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "ECS Allowed Ports",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": {
+          "IpProtocol": "tcp",
+          "FromPort": "0",
+          "ToPort": "65535",
+          "CidrIp": "0.0.0.0/0"
+        }
+      }
+    },
+    "IAMInstanceRole": {
+      "Condition": "CreateECS",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+        ]
+      },
+      "Type": "AWS::IAM::Role"
+    },
+    "ContainerHostProfile": {
+      "Condition": "CreateECS",
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ {
+          "Ref": "IAMInstanceRole"
+        } ]
+      }
+    },
+    "EcsInstanceLc": {
+      "Condition": "CreateECS",
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "ImageId": "ami-00f69adbdc780866c",
+        "InstanceType": "c5.4xlarge",
+        "AssociatePublicIpAddress": true,
+        "SecurityGroups": [
+          {
+            "Ref": "EcsSecurityGroup"
+          }
+        ],
+        "KeyName": {
+          "Fn::If": [
+            "HasKeyName", {"Ref": "KeyPairName"}, {"Ref": "AWS::NoValue"}
+          ]
+        },
+        "IamInstanceProfile": {
+          "Ref": "ContainerHostProfile"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 30,
+              "VolumeType": "gp2"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "cat > /etc/ecs/ecs.config << EOF\n",
+                "ECS_CLUSTER=",
+                {
+                  "Ref": "TranscribeTaskCluster"
+                }, "\n",
+                "ECS_BACKEND_HOST=\n",
+                "ECS_IMAGE_PULL_BEHAVIOR=once\n",
+                "ECS_DISABLE_IMAGE_CLEANUP=true\n",
+                "EOF"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "EcsInstanceAsg": {
+      "Condition": "CreateECS",
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "VPCZoneIdentifier": [{
+          "Ref": "PubSubnetAz"
+        }],
+        "LaunchConfigurationName": {
+          "Ref": "EcsInstanceLc"
+        },
+        "MinSize": "1",
+        "MaxSize": "1",
+        "DesiredCapacity": "1",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ECS Instance - ${AWS::StackName}"
+            },
+            "PropagateAtLaunch": "true"
+          },
+          {
+            "Key": "Description",
+            "Value": "This instance is the part of the Auto Scaling group which was created through ECS Console",
+            "PropagateAtLaunch": "true"
+          }
+        ]
+      }
+    },
+
+    "LambdaRole": {
+      "Condition": "CreateLambda",
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole",
+          "arn:aws:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess",
+          "arn:aws:iam::aws:policy/AmazonTranscribeFullAccess"
+        ],
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "inline",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "RecordingBucket",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [ "", [
+                      "arn:aws:s3:::", {
+                        "Ref": "RecordingBucket"
+                      },
+                      "/*"
+                    ]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:*"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TranscriptionTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:Put*",
+                    "cloudwatch:Get*",
+                    "cloudwatch:List*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "MainLambdaFunction": {
+      "Condition": "CreateLambda",
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "AutoPublishAlias": "Provisioned",
+        "MemorySize": 1024,
+        "Timeout": 900,
+        "Handler": "com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingLambda::handleRequest",
+        "Runtime": "java11",
+        "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "IS_TRANSCRIBE_ENABLED": "true",
+            "RECORDINGS_BUCKET_NAME": {
+              "Ref": "RecordingBucket"
+            }
+          }
+        },
+        "Events": {
+          "EventQueue": {
+            "Type": "SQS",
+            "Properties": {
+              "Queue": {
+                "Fn::GetAtt": [
+                  "EventSQS",
+                  "Arn"
+                ]
+              },
+              "BatchSize": 1
+            }
+          }
+        },
+        "ProvisionedConcurrencyConfig" : {
+          "ProvisionedConcurrentExecutions" : 2
+        }
+      }
+    }
+  }
 }

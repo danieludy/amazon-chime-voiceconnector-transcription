@@ -1,4 +1,10 @@
-apply plugin: 'java'
+plugins {
+    id 'java'
+    id 'com.bmuschko.docker-remote-api' version '6.4.0'
+}
+
+import com.bmuschko.gradle.docker.tasks.image.Dockerfile
+import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
 
 archivesBaseName = 'amazon-chime-voiceconnector-recordandtranscribe'
 repositories {
@@ -23,8 +29,36 @@ dependencies {
             'software.amazon.awssdk:netty-nio-client:2.2.0',
 
             // need this for logging
-            'org.apache.commons:commons-lang3:3.6'
+            'org.apache.commons:commons-lang3:3.6',
+
+            // need for argument parsing
+            'commons-cli:commons-cli:1.4'
     )
+}
+
+task dockerJar(type: Jar) {
+    manifest {
+        attributes 'Main-Classs': 'com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingDocker'
+    }
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}
+
+task copyJarToDocker(type: Copy) {
+    from dockerJar
+    into "$buildDir/docker"
+}
+
+task buildDockerFile(type: Dockerfile) {
+    from("alpine:latest")
+    runCommand("apk --no-cache add openjdk8 openjdk8-jre")
+    workingDir("/tmp/chime-streaming-transcribe/")
+    addFile(archivesBaseName + ".jar", "./lib/")
+}
+
+task buildDockerImage(type: DockerBuildImage) {
+    dependsOn(copyJarToDocker, buildDockerFile)
+    images.add('chime-transcribe:latest')
 }
 
 task buildZip(type: Zip) {
@@ -41,4 +75,10 @@ task copyCFTemplate(type: Copy){
     into "$buildDir/distributions"
 }
 
-build.dependsOn buildZip, copyCFTemplate
+task zipAndCopyRunTaskFunction(type: Zip){
+    from "infrastructure/sendRunTaskRequestLambdaFunction.js"
+    archiveFileName = "send-run-task-request-function.zip"
+    destinationDirectory = file("$buildDir/distributions")
+}
+
+build.dependsOn buildZip, copyCFTemplate, zipAndCopyRunTaskFunction, buildDockerFile
