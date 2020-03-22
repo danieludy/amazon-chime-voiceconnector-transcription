@@ -63,6 +63,9 @@
                 "EventPattern": {
                     "source": [
                         "aws.chime"
+                    ],
+                    "detail-type": [
+                        "Chime VoiceConnector Streaming Status"
                     ]
                 },
                 "Targets": [
@@ -211,6 +214,7 @@
         "MainLambdaFunction": {
             "Type": "AWS::Serverless::Function",
             "Properties": {
+                "AutoPublishAlias": "Provisioned",
                 "MemorySize": 1024,
                 "Timeout": 900,
                 "Handler": "com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingLambda::handleRequest",
@@ -243,6 +247,9 @@
                             "BatchSize": 1
                         }
                     }
+                },
+                "ProvisionedConcurrencyConfig" : {
+                    "ProvisionedConcurrentExecutions" : 2
                 }
             }
         }
