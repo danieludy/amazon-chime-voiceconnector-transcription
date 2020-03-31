@@ -83,42 +83,6 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
     }
 
     /**
-     * Get Max retries
-     *
-     * @return Max retries
-     */
-    public int getMaxRetries() {
-        return maxRetries;
-    }
-
-    /**
-     * Set Max retries
-     *
-     * @param maxRetries Max retries
-     */
-    public void setMaxRetries(int maxRetries) {
-        this.maxRetries = maxRetries;
-    }
-
-    /**
-     * Get sleep time
-     *
-     * @return sleep time between retries
-     */
-    public int getSleepTime() {
-        return sleepTime;
-    }
-
-    /**
-     * Set sleep time between retries
-     *
-     * @param sleepTime sleep time
-     */
-    public void setSleepTime(int sleepTime) {
-        this.sleepTime = sleepTime;
-    }
-
-    /**
      * Initiate a Stream Transcription with retry.
      *
      * @param request         StartStreamTranscriptionRequest to use to start transcription
@@ -239,7 +203,7 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         logger.debug("TranscribeStreamingRetryClient closed");
         this.client.close();
     }
