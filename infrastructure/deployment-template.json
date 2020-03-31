@@ -25,7 +25,7 @@
             "Properties": {
                 "AttributeDefinitions": [
                     {
-                        "AttributeName": "CallId",
+                        "AttributeName": "TransactionId",
                         "AttributeType": "S"
                     },
                     {
@@ -35,7 +35,7 @@
                 ],
                 "KeySchema": [
                     {
-                        "AttributeName": "CallId",
+                        "AttributeName": "TransactionId",
                         "KeyType": "HASH"
                     },
                     {

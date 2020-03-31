@@ -14,6 +14,8 @@ import java.text.NumberFormat;
 import java.time.Instant;
 import java.util.List;
 
+import static com.amazonaws.kvstranscribestreaming.DynamoDBConstants.*;
+
 /**
  * TranscribedSegmentWriter writes the transcript segments to DynamoDB
  *
@@ -34,16 +36,18 @@ import java.util.List;
  */
 public class TranscribedSegmentWriter {
 
-    private String contactId;
+    private final String transactionId;
+    private final String callId;
     private String speakerLabel;
-    private DynamoDB ddbClient;
-    private Boolean consoleLogTranscriptFlag;
+    private final DynamoDB ddbClient;
+    private final Boolean consoleLogTranscriptFlag;
     private static final String TABLE_TRANSCRIPT = "TranscriptSegment";
     private static final Logger logger = LoggerFactory.getLogger(TranscribedSegmentWriter.class);
 
-    public TranscribedSegmentWriter(String contactId, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag) {
+    public TranscribedSegmentWriter(String transactionId, String callId, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag) {
 
-        this.contactId = Validate.notNull(contactId);
+        this.transactionId = Validate.notNull(transactionId);
+        this.callId = callId;
         this.ddbClient = Validate.notNull(ddbClient);
         this.consoleLogTranscriptFlag = Validate.notNull(consoleLogTranscriptFlag);
 
@@ -52,9 +56,9 @@ public class TranscribedSegmentWriter {
         this.speakerLabel = null;
     }
 
-    public String getContactId() {
+    public String getTransactionId() {
 
-        return this.contactId;
+        return this.transactionId;
     }
 
     public String getSpeakerLabel() {
@@ -99,15 +103,16 @@ public class TranscribedSegmentWriter {
     public void writeTranscribeDoneToDynamoDB()
     {
         Instant now = Instant.now();
-        logger.info("writing end of transcription to DDB for " + contactId);
+        logger.info("writing end of transcription to DDB for " + this.transactionId);
         Item ddbItem = new Item()
-            .withKeyComponent("CallId", contactId)
-            .withKeyComponent("StartTime", now.getEpochSecond())
-            .withString("Transcript", "END_OF_TRANSCRIPTION")
+            .withKeyComponent(DynamoDBConstants.TRANSACTION_ID, this.transactionId)
+            .withKeyComponent(START_TIME, now.getEpochSecond())
+            .withString(DynamoDBConstants.CALL_ID, this.callId)
+            .withString(TRANSCRIPT, "END_OF_TRANSCRIPTION")
             // LoggedOn is an ISO-8601 string representation of when the entry was created
-            .withString("LoggedOn", now.toString())
-            .withBoolean("IsPartial", Boolean.FALSE)
-            .withBoolean("IsFinal", Boolean.TRUE);
+            .withString(LOGGED_ON, now.toString())
+            .withBoolean(IS_PARTIAL, Boolean.FALSE)
+            .withBoolean(IS_FINAL, Boolean.TRUE);
         
         if (ddbItem != null) {
             try {
@@ -127,38 +132,35 @@ public class TranscribedSegmentWriter {
         QuerySpec spec = new QuerySpec()
             .withMaxResultSize(1)
             .withKeyConditionExpression("CallId = :c_id")
-            .withValueMap(new ValueMap().withString(":c_id", getContactId()));
+            .withValueMap(new ValueMap().withString(":c_id", getTransactionId()));
 
         if (getDdbClient().getTable(TABLE_TRANSCRIPT).query(spec).iterator().hasNext()) {
 
             speaker = "spk_1";
         }
-        logger.info(String.format("Speaker label was assumed to be %s for %s", speaker, getContactId()));
+        logger.info(String.format("Speaker label was assumed to be %s for %s", speaker, getTransactionId()));
 
         return speaker;
     }
 
     private Item toDynamoDbItem(Result result) {
-
-        String contactId = this.getContactId();
         Item ddbItem = null;
-
         Instant now = Instant.now();
-
         if (result.alternatives().size() > 0) {
             if (!result.alternatives().get(0).transcript().isEmpty()) {
 
                 ddbItem = new Item()
-                        .withKeyComponent("CallId", contactId)
-                        .withKeyComponent("StartTime", result.startTime())
-                        .withString("Speaker", getSpeakerLabel())
-                        .withDouble("EndTime", result.endTime())
-                        .withString("SegmentId", result.resultId())
-                        .withString("Transcript", result.alternatives().get(0).transcript())
+                        .withKeyComponent(DynamoDBConstants.TRANSACTION_ID, this.transactionId)
+                        .withKeyComponent(START_TIME, result.startTime())
+                        .withString(DynamoDBConstants.CALL_ID, this.callId)
+                        .withString(SPEAKER, getSpeakerLabel())
+                        .withDouble(END_TIME, result.endTime())
+                        .withString(SEGMENT_ID, result.resultId())
+                        .withString(TRANSCRIPT, result.alternatives().get(0).transcript())
                         // LoggedOn is an ISO-8601 string representation of when the entry was created
-                        .withString("LoggedOn", now.toString())
-                        .withBoolean("IsPartial", result.isPartial())
-                        .withBoolean("IsFinal", Boolean.FALSE);
+                        .withString(LOGGED_ON, now.toString())
+                        .withBoolean(IS_PARTIAL, result.isPartial())
+                        .withBoolean(IS_FINAL, Boolean.FALSE);
 
                 if (consoleLogTranscriptFlag) {
 

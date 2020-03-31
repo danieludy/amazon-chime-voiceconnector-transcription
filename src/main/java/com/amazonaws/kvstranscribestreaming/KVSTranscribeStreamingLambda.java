@@ -132,7 +132,7 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
                     logger.info("Received STARTED event");
 
                     // create a SegmentWriter to be able to save off transcription results
-                    segmentWriter = new TranscribedSegmentWriter(transactionId, dynamoDB, CONSOLE_LOG_TRANSCRIPT_FLAG);
+                    segmentWriter = new TranscribedSegmentWriter(transactionId, callId, dynamoDB, CONSOLE_LOG_TRANSCRIPT_FLAG);
 
                     startKVSToTranscribeStreaming(streamARN, firstFragementNumber, transactionId,
                             Boolean.valueOf(IS_TRANSCRIBE_ENABLED), true, callId);
