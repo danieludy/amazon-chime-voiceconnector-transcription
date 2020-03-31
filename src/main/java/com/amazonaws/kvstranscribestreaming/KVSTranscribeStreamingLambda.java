@@ -75,6 +75,7 @@ import java.util.concurrent.TimeoutException;
  */
 public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, String> {
 
+    private static final int CHUNK_SIZE_IN_KB = 4;
     private static final Regions REGION = Regions.fromName(System.getenv("AWS_REGION"));
     private static final Regions TRANSCRIBE_REGION = Regions.fromName(System.getenv("AWS_REGION"));
     private static final String TRANSCRIBE_ENDPOINT = "https://transcribestreaming." + TRANSCRIBE_REGION.getName()
@@ -170,7 +171,7 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
         StreamingMkvReader streamingMkvReader = StreamingMkvReader
                 .createDefault(new InputStreamParserByteSource(kvsInputStream));
 
-        FragmentMetadataVisitor.BasicMkvTagProcessor tagProcessor = new FragmentMetadataVisitor.BasicMkvTagProcessor();
+        KVSTransactionIdTagProcessor tagProcessor = new KVSTransactionIdTagProcessor(transactionId);
         FragmentMetadataVisitor fragmentVisitor = FragmentMetadataVisitor.create(Optional.of(tagProcessor));
 
         if (transcribeEnabled) {
@@ -203,15 +204,19 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
             try {
                 logger.info("Transcribe is not enabled; saving audio bytes to location");
 
-                // Write audio bytes from the KVS stream to the temporary file
-                ByteBuffer audioBuffer = KVSUtils.getByteBufferFromStream(streamingMkvReader, fragmentVisitor,
-                        tagProcessor, transactionId);
-                while (audioBuffer.remaining() > 0) {
-                    byte[] audioBytes = new byte[audioBuffer.remaining()];
-                    audioBuffer.get(audioBytes);
-                    fileOutputStream.write(audioBytes);
-                    audioBuffer = KVSUtils.getByteBufferFromStream(streamingMkvReader, fragmentVisitor, tagProcessor,
-                            transactionId);
+                while(true)
+                {
+                    ByteBuffer outputBuffer = KVSUtils.getByteBufferFromStream(streamingMkvReader, fragmentVisitor, tagProcessor,
+                            CHUNK_SIZE_IN_KB);
+
+                    if (outputBuffer.remaining() > 0) {
+                        //Write audioBytes to a temporary file as they are received from the stream
+                        byte[] audioBytes = new byte[outputBuffer.remaining()];
+                        outputBuffer.get(audioBytes);
+                        fileOutputStream.write(audioBytes);
+                    } else {
+                        break;
+                    }
                 }
 
             } finally {
@@ -285,13 +290,13 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
         private final StreamingMkvReader streamingMkvReader;
         private String callId;
         private OutputStream outputStream;
-        private FragmentMetadataVisitor.BasicMkvTagProcessor tagProcessor;
+        private KVSTransactionIdTagProcessor tagProcessor;
         private FragmentMetadataVisitor fragmentVisitor;
         private boolean shouldWriteToOutputStream;
 
         private KVSAudioStreamPublisher(StreamingMkvReader streamingMkvReader, String callId, OutputStream outputStream,
-                FragmentMetadataVisitor.BasicMkvTagProcessor tagProcessor, FragmentMetadataVisitor fragmentVisitor,
-                boolean shouldWriteToOutputStream) {
+                                        KVSTransactionIdTagProcessor tagProcessor, FragmentMetadataVisitor fragmentVisitor,
+                                        boolean shouldWriteToOutputStream) {
             this.streamingMkvReader = streamingMkvReader;
             this.callId = callId;
             this.outputStream = outputStream;

@@ -2,6 +2,7 @@ package com.amazonaws.transcribestreaming;
 
 import com.amazonaws.kinesisvideo.parser.mkv.StreamingMkvReader;
 import com.amazonaws.kinesisvideo.parser.utilities.FragmentMetadataVisitor;
+import com.amazonaws.kvstranscribestreaming.KVSTransactionIdTagProcessor;
 import com.amazonaws.kvstranscribestreaming.KVSUtils;
 import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Subscriber;
@@ -50,13 +51,13 @@ public class KVSByteToAudioEventSubscription implements Subscription {
     private final StreamingMkvReader streamingMkvReader;
     private String callId;
     private OutputStream outputStream;
-    private final FragmentMetadataVisitor.BasicMkvTagProcessor tagProcessor;
+    private final KVSTransactionIdTagProcessor tagProcessor;
     private final FragmentMetadataVisitor fragmentVisitor;
     private final boolean shouldWriteToOutputStream;
 
     public KVSByteToAudioEventSubscription(Subscriber<? super AudioStream> s, StreamingMkvReader streamingMkvReader,
-            String callId, OutputStream outputStream, FragmentMetadataVisitor.BasicMkvTagProcessor tagProcessor,
-            FragmentMetadataVisitor fragmentVisitor, boolean shouldWriteToOutputStream) {
+                                           String callId, OutputStream outputStream, KVSTransactionIdTagProcessor tagProcessor,
+                                           FragmentMetadataVisitor fragmentVisitor, boolean shouldWriteToOutputStream) {
         this.subscriber = Validate.notNull(s);
         this.streamingMkvReader = Validate.notNull(streamingMkvReader);
         this.callId = Validate.notNull(callId);
@@ -79,7 +80,7 @@ public class KVSByteToAudioEventSubscription implements Subscription {
             try {
                 while (demand.get() > 0) {
                     ByteBuffer audioBuffer = KVSUtils.getByteBufferFromStream(streamingMkvReader, fragmentVisitor,
-                            tagProcessor, callId, CHUNK_SIZE_IN_KB);
+                            tagProcessor, CHUNK_SIZE_IN_KB);
 
                     if (audioBuffer.remaining() > 0) {
 
