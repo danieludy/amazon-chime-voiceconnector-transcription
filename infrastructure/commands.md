@@ -71,27 +71,17 @@ aws cloudformation package --template-file ./deployment-template.json --s3-bucke
 
 Deploy the package. If you choose to use Lambda for transcription solution, specify `SolutionType` as `LAMBDA`. If you choose ECS, specify it as `ECS`. 
 
-Note: KeyPairName is optional for ECS solution. It is used to ssh into ec2 host for debugging.
-
 > Deploy the package using Lambda solution
 >```
 >aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=LAMBDA
 >```
 
-> Deploy the package using AWS ECS and KeyPairName is specified
+> Deploy the package using AWS ECS
 >```
 >ACCOUNT=<replace_with_account>
 >REPOSITORY_NAME=chime-transcribe
 >IMAGE_NAME=$ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/$REPOSITORY_NAME\:latest
 >aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=ECS DockerImage=$IMAGE_NAME KeyPairName=<replace_with_key>
->```
-
-> Deploy the package using AWS ECS and KeyPairName is not specified
->```
->ACCOUNT=<replace_with_account>
->REPOSITORY_NAME=chime-transcribe
->IMAGE_NAME=$ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/$REPOSITORY_NAME\:latest
->aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=ECS DockerImage=$IMAGE_NAME
 >```
 
 ## Deploy Docker Image (ECS specific)
