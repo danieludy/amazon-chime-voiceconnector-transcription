@@ -40,7 +40,7 @@ The Lambda code expects the Kinesis Video Stream details provided by the Amazon 
 As of this writing Amazon Transcribe supports real time transcription of British English (en-GB), US English (en-US), French (fr-FR), Canadian French (fr-CA); and US Spanish (es-US). See the Amazon Transcribe [streaming documentation](https://docs.aws.amazon.com/transcribe/latest/dg/streaming.html) for the latest supported languages.
 
 ## Container based
-With container based solution you can trasncribe the calls longer then 15 min.
+With container based solution you can transcribe the calls longer then 15 min.
 
 ### Architecture Overview
 ![](images/kinesis-chime-ecs.svg)
@@ -59,7 +59,6 @@ In the diagram above:
 - (Step 3) A EventBridge event rule is created to take these events and trigger a Lambda function
 - (Step 4) A container application is created using the sample code in this repository to trigger off of this Lambda function. This container application will serve as a Kinesis Video Stream (KVS) Consumer/transcriber and will continue to process audio for until the call is disconnected.
 - (Step 5) The container application will take the transcripts returned from Amazon Transcribe and save the transcripted segments to a DynamoDB table.  It will also save the audio bytes to a file when the call ends and upload to S3 as a wav file.
-
 
 The container service code expects the Kinesis Video Stream details provided by the Amazon EventBridge Event including `transactionId`, `streamArn` and `startFragmentNumber`.The handler function of the container service is present in `KVSTranscribeStreamingHandler.java` and it uses the GetMedia API of Kinesis Video Stream to fetch the InputStream of the customer audio call. The InputStream is processed using the AWS Kinesis Video Streams provided Parser Library. If the `transcriptionEnabled` property is set to true on the input, a TranscribeStreamingRetryClient client is used to send audio bytes of the audio call to Transcribe. As the transcript segments are being returned, they are saved in a DynamoDB table having TransactionId as the Partition key and StartTime of the segment as the Sort key. The audio bytes are also saved in a file along with this and at the end of the audio call, if the `saveCallRecording` property is set to true on the input, the WAV audio file is uploaded to S3 in the provided `RECORDINGS_BUCKET_NAME` bucket. 
 
@@ -136,9 +135,7 @@ Deploy the package
 aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=<LAMBDA|ECS>
 ```
 
-<aside class="warning">
-Following steps are only needed for SolutionType ECS
-</aside>
+> :warning: **Following steps are only needed for SolutionType=ECS**
 
 Build docker image
 ```
