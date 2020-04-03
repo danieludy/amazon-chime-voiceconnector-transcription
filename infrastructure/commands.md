@@ -50,6 +50,7 @@ wget https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/re
 >>```
 
 ## Deploy Sample
+Make sure you are in the infrastructure directory which includes `deployment-template.json`.
 
 Use [AWS Command Line Interface](https://aws.amazon.com/cli/) to deploy the sample
 
@@ -63,13 +64,53 @@ Create S3 bucket to upload the lambda code
 aws s3api create-bucket --bucket source-us-east-1-<accountid> --region us-east-1
 ```
 
-Package local artifacts
+Zip lambda function and package local artifacts. Lambda function is to receive CloudWatch event and send runTask request to ECS.
 ```
 aws cloudformation package --template-file ./deployment-template.json --s3-bucket source-us-east-1-<accountid> --force-upload --use-json --output-template-file packaged.json
 ```
 
-Deploy the package
+Deploy the package. If you choose to use Lambda for transcription solution, specify `SolutionType` as `LAMBDA`. If you choose ECS, specify it as `ECS`. 
 
+Note: KeyPairName is optional for ECS solution. It is used to ssh into ec2 host for debugging.
+
+> Deploy the package using Lambda solution
+>```
+>aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=LAMBDA
+>```
+
+> Deploy the package using AWS ECS and KeyPairName is specified
+>```
+>ACCOUNT=<replace_with_account>
+>REPOSITORY_NAME=chime-transcribe
+>IMAGE_NAME=$ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/$REPOSITORY_NAME\:latest
+>aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=ECS DockerImage=$IMAGE_NAME KeyPairName=<replace_with_key>
+>```
+
+> Deploy the package using AWS ECS and KeyPairName is not specified
+>```
+>ACCOUNT=<replace_with_account>
+>REPOSITORY_NAME=chime-transcribe
+>IMAGE_NAME=$ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/$REPOSITORY_NAME\:latest
+>aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=ECS DockerImage=$IMAGE_NAME
+>```
+
+## Deploy Docker Image (ECS specific)
+Before image deployment. Make sure you are in the project root directory which includes `build.gradle`, `Dockerfile` and `gradlew` files.
+
+Build docker image
 ```
-aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1
+./gradlew buildDockerImage
 ```
+> Missing Gradle? Check [Gradle Build Tool](https://gradle.org)
+
+Docker log into ECR
+```
+aws ecr get-login-password  --region us-east-1 | docker login -u AWS --password-stdin https://$ACCOUNT.dkr.ecr.us-east-1.amazonaws.com 
+```
+
+Tag the image and push Docker Image to ECR
+```
+docker tag chime-transcribe:latest $IMAGE_NAME && docker push $IMAGE_NAME
+```
+> Missing docker?
+> Check [docker install document](https://docs.docker.com/install/)
