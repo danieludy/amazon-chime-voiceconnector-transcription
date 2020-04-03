@@ -131,7 +131,7 @@ aws cloudformation package --template-file ./deployment-template.json --s3-bucke
 ```
 
 Deploy the package
-> :notice: **choose `SolutionType=LAMBDA` for Lambda based solution `SolutionType=ECS` for Container based solution**
+> :warning: **choose `SolutionType=LAMBDA` for Lambda based solution `SolutionType=ECS` for Container based solution**
 
 ```
 aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=<LAMBDA|ECS>
