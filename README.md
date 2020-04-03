@@ -22,7 +22,7 @@ Lambda solution is easy to begin with and have a low infrastructure footprint. N
 #### Description
 This solution can be configured using the following services: [Amazon Chime](https://aws.amazon.com/chime/) - Voice Connector, [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams), [Amazon CloudWatch](https://aws.amazon.com/cloudwatch/), [Amazon Simple Queue Service](https://aws.amazon.com/sqs/), [Amazon Transcribe](https://aws.amazon.com/transcribe), [Amazon DynamoDB](https://aws.amazon.com/dynamodb), [AWS Lambda](https://aws.amazon.com/lambda), and [Amazon S3](https://aws.amazon.com/s3).
 
-With [Amazon Chime](https://aws.amazon.com/chime/) Voice Connector, customer audio can be live streamed to Kinesis Video Streams as described in this [Amazon Chime documentation] (https://docs.aws.amazon.com/chime). This project serves as an example of how to consume an Amazon Chime Voice Connector live audio stream, capture the audio and send it to S3 in the form of an audio wav file, as well as perform real-time transcription using [Amazon Transcribe](https://aws.amazon.com/transcribe) and posting those transcriptions to a DynamoDB table. 
+With [Amazon Chime](https://aws.amazon.com/chime/) Voice Connector, customer audio can be live streamed to Kinesis Video Streams as described in this [Amazon Chime documentation](https://docs.aws.amazon.com/chime). This project serves as an example of how to consume an Amazon Chime Voice Connector live audio stream, capture the audio and send it to S3 in the form of an audio wav file, as well as perform real-time transcription using [Amazon Transcribe](https://aws.amazon.com/transcribe) and posting those transcriptions to a DynamoDB table. 
 
 In the diagram above:
 
@@ -131,11 +131,13 @@ aws cloudformation package --template-file ./deployment-template.json --s3-bucke
 ```
 
 Deploy the package
+> :notice: **choose `SolutionType=LAMBDA` for Lambda based solution `SolutionType=ECS` for Container based solution**
+
 ```
 aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=<LAMBDA|ECS>
 ```
 
-> :warning: **Following steps are only needed for SolutionType=ECS**
+> :warning: **Following steps are only needed for Container based solution**
 
 Build docker image
 ```
