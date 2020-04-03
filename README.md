@@ -1,4 +1,4 @@
-# Amazon Chime Voice Connector Real-Time Transcription Lambda
+# Real-Time Transcription with Amazon Chime Voice Connector 
 
 Making it easy to get started with Amazon Chime Voice Connector live audio streaming and real-time transcription using Amazon Transcribe.
 
