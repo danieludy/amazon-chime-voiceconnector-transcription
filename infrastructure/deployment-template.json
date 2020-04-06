@@ -445,6 +445,7 @@
     "SendRunTaskRequestLambdaEventMapping": {
       "Condition": "CreateECS",
       "Type": "AWS::Lambda::EventSourceMapping",
+      "DependsOn": ["SendRunTaskRequestLambdaFunctionVersion"],
       "Properties": {
           "Enabled": true,
           "EventSourceArn": {
