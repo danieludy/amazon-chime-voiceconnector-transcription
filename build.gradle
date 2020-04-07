@@ -50,7 +50,7 @@ task copyJarToDocker(type: Copy) {
 }
 
 task buildDockerFile(type: Dockerfile) {
-    from("amazoncorretto:latest")
+    from("amazoncorretto:8")
     workingDir("/tmp/chime-streaming-transcribe/")
     addFile(archivesBaseName + ".jar", "./lib/")
 }
