@@ -623,8 +623,6 @@
                 }, "\n",
                 "ECS_BACKEND_HOST=\n",
                 "ECS_IMAGE_PULL_BEHAVIOR=prefer-cached\n",
-                "ECS_IMAGE_MINIMUM_CLEANUP_AGE=72h\n",
-                "NON_ECS_IMAGE_MINIMUM_CLEANUP_AGE=72h\n",
                 "EOF"
               ]
             ]

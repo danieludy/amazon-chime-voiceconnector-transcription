@@ -64,7 +64,9 @@ Create S3 bucket to upload the lambda code
 aws s3api create-bucket --bucket source-us-east-1-<accountid> --region us-east-1
 ```
 
-Zip lambda function and package local artifacts. Lambda function is to receive CloudWatch event and send runTask request to ECS.
+> NOTE: For ECS solution, parameters for image cleanup are tunable. See [Automated Task and Image Cleanup](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/automated_image_cleanup.html).
+
+Package local artifacts. Lambda function is to receive CloudWatch event and send runTask request to ECS.
 ```
 aws cloudformation package --template-file ./deployment-template.json --s3-bucket source-us-east-1-<accountid> --force-upload --use-json --output-template-file packaged.json
 ```
