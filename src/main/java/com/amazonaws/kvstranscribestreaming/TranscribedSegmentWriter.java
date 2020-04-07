@@ -35,7 +35,6 @@ import static com.amazonaws.kvstranscribestreaming.DynamoDBConstants.*;
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 public class TranscribedSegmentWriter {
-
     private final String transactionId;
     private final String callId;
     private String speakerLabel;
@@ -45,7 +44,6 @@ public class TranscribedSegmentWriter {
     private static final Logger logger = LoggerFactory.getLogger(TranscribedSegmentWriter.class);
 
     public TranscribedSegmentWriter(String transactionId, String callId, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag) {
-
         this.transactionId = Validate.notNull(transactionId);
         this.callId = callId;
         this.ddbClient = Validate.notNull(ddbClient);
@@ -57,12 +55,10 @@ public class TranscribedSegmentWriter {
     }
 
     public String getTransactionId() {
-
         return this.transactionId;
     }
 
     public String getSpeakerLabel() {
-
         if (this.speakerLabel == null) {
             this.speakerLabel = initSpeakerLabel();
         }
@@ -70,12 +66,10 @@ public class TranscribedSegmentWriter {
     }
 
     public DynamoDB getDdbClient() {
-
         return this.ddbClient;
     }
 
     public void writeToDynamoDB(TranscriptEvent transcriptEvent) {
-
         List<Result> results = transcriptEvent.transcript().results();
         if (results.size() > 0) {
 
@@ -100,8 +94,7 @@ public class TranscribedSegmentWriter {
      * Transcribe website looks for Final event in DynamoDB payload to stop polling for messages. This is workaround
      * to display end of streaming.
      */
-    public void writeTranscribeDoneToDynamoDB()
-    {
+    public void writeTranscribeDoneToDynamoDB() {
         Instant now = Instant.now();
         logger.info("writing end of transcription to DDB for " + this.transactionId);
         Item ddbItem = new Item()
@@ -124,20 +117,19 @@ public class TranscribedSegmentWriter {
     }
 
     private String initSpeakerLabel() {
-
         // assume that the first speaker is spk_0 and all others are spk_1
         // TODO:  if we need to be more precise, use the stream ARN to determine how many speakers for a given CallId
         String speaker = "spk_0";
 
         QuerySpec spec = new QuerySpec()
             .withMaxResultSize(1)
-            .withKeyConditionExpression("CallId = :c_id")
-            .withValueMap(new ValueMap().withString(":c_id", getTransactionId()));
+            .withKeyConditionExpression(DynamoDBConstants.TRANSACTION_ID + " = :id")
+            .withValueMap(new ValueMap().withString(":id", getTransactionId()));
 
         if (getDdbClient().getTable(TABLE_TRANSCRIPT).query(spec).iterator().hasNext()) {
-
             speaker = "spk_1";
         }
+
         logger.info(String.format("Speaker label was assumed to be %s for %s", speaker, getTransactionId()));
 
         return speaker;
@@ -148,7 +140,6 @@ public class TranscribedSegmentWriter {
         Instant now = Instant.now();
         if (result.alternatives().size() > 0) {
             if (!result.alternatives().get(0).transcript().isEmpty()) {
-
                 ddbItem = new Item()
                         .withKeyComponent(DynamoDBConstants.TRANSACTION_ID, this.transactionId)
                         .withKeyComponent(START_TIME, result.startTime())
@@ -163,7 +154,6 @@ public class TranscribedSegmentWriter {
                         .withBoolean(IS_FINAL, Boolean.FALSE);
 
                 if (consoleLogTranscriptFlag) {
-
                     NumberFormat nf = NumberFormat.getInstance();
                     nf.setMinimumFractionDigits(3);
                     nf.setMaximumFractionDigits(3);
