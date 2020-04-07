@@ -50,8 +50,7 @@ task copyJarToDocker(type: Copy) {
 }
 
 task buildDockerFile(type: Dockerfile) {
-    from("alpine:latest")
-    runCommand("apk --no-cache add openjdk8 openjdk8-jre")
+    from("amazoncorretto:latest")
     workingDir("/tmp/chime-streaming-transcribe/")
     addFile(archivesBaseName + ".jar", "./lib/")
 }
