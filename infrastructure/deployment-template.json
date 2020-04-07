@@ -622,8 +622,7 @@
                   "Ref": "TranscribeTaskCluster"
                 }, "\n",
                 "ECS_BACKEND_HOST=\n",
-                "ECS_IMAGE_PULL_BEHAVIOR=once\n",
-                "ECS_DISABLE_IMAGE_CLEANUP=true\n",
+                "ECS_IMAGE_PULL_BEHAVIOR=prefer-cached\n",
                 "EOF"
               ]
             ]
