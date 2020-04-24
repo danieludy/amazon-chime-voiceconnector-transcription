@@ -12,7 +12,7 @@
     "DockerImage": {
       "Description": "The name of image in ECR",
       "Type": "String",
-      "Default": ""
+      "Default": "amazon/amazon-chime-voiceconnector-transcription:latest"
     },
     "KeyPairName": {
       "Description": "The name of KeyPair which is used to ssh into EC2 instance",

@@ -137,24 +137,4 @@ Deploy the package
 aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=<LAMBDA|ECS>
 ```
 
-> :warning: **Following steps are only needed for Container based solution**
-
-Build docker image
-```
-./gradlew buildDockerImage
-```
-> Missing Gradle? Check [Gradle Build Tool](https://gradle.org)
-
-Docker log into ECR
-```
-aws ecr get-login-password  --region us-east-1 | docker login -u AWS --password-stdin https://$ACCOUNT.dkr.ecr.us-east-1.amazonaws.com 
-```
-
-Tag the image and push Docker Image to ECR
-```
-docker tag chime-transcribe:latest $IMAGE_NAME && docker push $IMAGE_NAME
-```
-> Missing docker?
-> Check [docker install document](https://docs.docker.com/install/)
-
 Place test calls through Amazon Voice Connector and view transcripts in DynamoDB and recordings in S3.
