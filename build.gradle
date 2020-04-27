@@ -70,6 +70,12 @@ task buildZip(type: Zip) {
     }
 }
 
+task copyZipFile(type: Copy) {
+    dependsOn tasks.named("buildZip")
+    from "$buildDir/distributions/amazon-chime-voiceconnector-recordandtranscribe.zip"
+    into "./infrastructure"
+}
+
 task copyCFTemplate(type: Copy){
     from "infrastructure/deployment-template.json"
     into "$buildDir/distributions"
@@ -81,4 +87,4 @@ task zipAndCopyRunTaskFunction(type: Zip){
     destinationDirectory = file("$buildDir/distributions")
 }
 
-build.dependsOn buildZip, copyCFTemplate, zipAndCopyRunTaskFunction, buildDockerFile
+build.dependsOn buildZip, copyZipFile, copyCFTemplate, zipAndCopyRunTaskFunction, buildDockerFile
