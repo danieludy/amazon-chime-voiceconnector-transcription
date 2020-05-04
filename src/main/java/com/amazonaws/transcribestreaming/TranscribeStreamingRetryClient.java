@@ -7,10 +7,12 @@ import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.auth.signer.EventStreamAws4Signer;
+import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.transcribestreaming.TranscribeStreamingAsyncClient;
 import software.amazon.awssdk.services.transcribestreaming.model.AudioStream;
+import software.amazon.awssdk.services.transcribestreaming.model.BadRequestException;
 import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionRequest;
 import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionResponseHandler;
 
@@ -43,13 +45,16 @@ import java.util.concurrent.CompletableFuture;
  */
 public class TranscribeStreamingRetryClient implements AutoCloseable {
 
-    private static final int DEFAULT_MAX_SLEEP_TIME_MILLS = 500;
-    private int sleepTime = DEFAULT_MAX_SLEEP_TIME_MILLS;
+    private static final int DEFAULT_MAX_RETRIES = 10;
+    private static final int DEFAULT_MAX_SLEEP_TIME_MILLS = 100;
+    private static final Logger log = LoggerFactory.getLogger(TranscribeStreamingRetryClient.class);
+
     private final TranscribeStreamingAsyncClient client;
     private final MetricsUtil metricsUtil;
-    List<Class<?>> nonRetriableExceptions = Arrays.asList(SdkClientException.class);
 
-    private static final Logger logger = LoggerFactory.getLogger(TranscribeStreamingRetryClient.class);
+    List<Class<?>> nonRetriableExceptions = Arrays.asList(BadRequestException.class);
+    private int maxRetries = DEFAULT_MAX_RETRIES;
+    private int sleepTime = DEFAULT_MAX_SLEEP_TIME_MILLS;
 
     /**
      * Create a TranscribeStreamingRetryClient with given credential and configuration
@@ -64,9 +69,12 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
                                           String endpoint, Regions region, MetricsUtil metricsUtil) throws URISyntaxException {
         this(TranscribeStreamingAsyncClient.builder()
                 .credentialsProvider(creds)
+                .overrideConfiguration(
+                        c -> c.putAdvancedOption(SdkAdvancedClientOption.SIGNER, EventStreamAws4Signer.create()))
                 .endpointOverride(new URI(endpoint))
                 .region(Region.of(region.getName()))
-                .build(), metricsUtil);
+                .build(),
+                metricsUtil);
     }
 
     /**
@@ -78,6 +86,42 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
     public TranscribeStreamingRetryClient(TranscribeStreamingAsyncClient client, MetricsUtil metricsUtil) {
         this.client = client;
         this.metricsUtil = metricsUtil;
+    }
+
+    /**
+     * Get Max retries
+     *
+     * @return Max retries
+     */
+    public int getMaxRetries() {
+        return maxRetries;
+    }
+
+    /**
+     * Set Max retries
+     *
+     * @param maxRetries Max retries
+     */
+    public void setMaxRetries(int maxRetries) {
+        this.maxRetries = maxRetries;
+    }
+
+    /**
+     * Get sleep time
+     *
+     * @return sleep time between retries
+     */
+    public int getSleepTime() {
+        return sleepTime;
+    }
+
+    /**
+     * Set sleep time between retries
+     *
+     * @param sleepTime sleep time
+     */
+    public void setSleepTime(int sleepTime) {
+        this.sleepTime = sleepTime;
     }
 
     /**
@@ -99,7 +143,7 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
 
         CompletableFuture<Void> finalFuture = new CompletableFuture<>();
 
-        recursiveStartStream(rebuildRequestWithSession(request), publisher, responseHandler, finalFuture);
+        recursiveStartStream(rebuildRequestWithSession(request), publisher, responseHandler, finalFuture, 0);
 
         return finalFuture;
     }
@@ -111,35 +155,38 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
      * @param publisher       The source audio stream as Publisher
      * @param responseHandler StreamTranscriptionBehavior object that defines how the response needs to be handled.
      * @param finalFuture     final future to finish on completing the chained futures.
+     * @param retryAttempt    Current attempt number
      */
     private void recursiveStartStream(final StartStreamTranscriptionRequest request,
-                                      final Publisher<AudioStream> publisher,
-                                      final StreamTranscriptionBehavior responseHandler,
-                                      final CompletableFuture<Void> finalFuture) {
+            final Publisher<AudioStream> publisher,
+            final StreamTranscriptionBehavior responseHandler,
+            final CompletableFuture<Void> finalFuture,
+            final int retryAttempt) {
         CompletableFuture<Void> result = client.startStreamTranscription(request, publisher,
                 getResponseHandler(responseHandler));
         result.whenComplete((r, e) -> {
             if (e != null) {
-                logger.debug("Error occured: " + e.getMessage());
+                log.debug("Error occured:", e);
 
-                if (isExceptionRetriable(e)) {
-                    logger.debug("Retriable error occurred and will be retried.");
-                    logger.debug("Sleeping for sometime before retrying...");
+                if (retryAttempt <= maxRetries && isExceptionRetriable(e)) {
+                    log.debug("Retriable error occurred and will be retried.");
+                    log.debug("Sleeping for sometime before retrying...");
                     try {
                         Thread.sleep(sleepTime);
                     } catch (InterruptedException e1) {
-                        logger.error("Sleep between retries interrupted. Failed with exception: ", e);
-                        finalFuture.completeExceptionally(e);
+                        log.debug("Unable to sleep. Failed with exception: ", e);
+                        e1.printStackTrace();
                     }
-                    recursiveStartStream(request, publisher, responseHandler, finalFuture);
+                    log.debug("Making retry attempt: " + (retryAttempt + 1));
+                    recursiveStartStream(request, publisher, responseHandler, finalFuture, retryAttempt + 1);
                 } else {
                     metricsUtil.recordMetric("TranscribeStreamError", 1);
-                    logger.error("Encountered unretriable exception or ran out of retries.", e);
+                    log.error("Encountered unretriable exception or ran out of retries. ");
                     responseHandler.onError(e);
                     finalFuture.completeExceptionally(e);
                 }
             } else {
-                metricsUtil.recordMetric("TranscribeStreamError", 0);
+                metricsUtil.recordMetric("TranscribeStreamSuccess", 1);
                 responseHandler.onComplete();
                 finalFuture.complete(null);
             }
@@ -178,6 +225,7 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
                     // We swallow any exception occurred while processing the TranscriptEvent and continue transcribing
                     // Transcribe errors will however cause the future to complete exceptionally and we'll retry (if applicable)
                     catch (Exception e) {
+                        log.error("Error happened when transcribing", e);
                     }
                 })
                 .build();
@@ -191,15 +239,12 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
      * @return True if the exception is retriable
      */
     private boolean isExceptionRetriable(Throwable e) {
-        if (nonRetriableExceptions.contains(e.getCause().getClass())) {
-            return false;
-        }
-        return true;
+        e.printStackTrace();
+
+        return nonRetriableExceptions.contains(e.getClass());
     }
 
-    @Override
     public void close() {
-        logger.debug("TranscribeStreamingRetryClient closed");
         this.client.close();
     }
 }
