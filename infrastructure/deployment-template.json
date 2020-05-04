@@ -18,6 +18,11 @@
       "Description": "The name of KeyPair which is used to ssh into EC2 instance",
       "Type": "String",
       "Default": ""
+    },
+    "ECSImageId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Description": "AMI Id of ECS Instance",
+      "Default": "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
     }
   },
   "Conditions": {
@@ -585,7 +590,9 @@
       "Condition": "CreateECS",
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Properties": {
-        "ImageId": "ami-00f69adbdc780866c",
+        "ImageId": {
+          "Ref": "ECSImageId"
+        },
         "InstanceType": "c5.4xlarge",
         "AssociatePublicIpAddress": true,
         "SecurityGroups": [
