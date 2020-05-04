@@ -41,6 +41,7 @@
   "Resources": {
     "RecordingBucket": {
       "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "callrecordings-${AWS::Region}-${AWS::AccountId}"
@@ -58,6 +59,7 @@
     },
     "TranscriptionTable": {
       "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Retain",
       "Properties": {
         "AttributeDefinitions": [
           {
