@@ -127,6 +127,7 @@ aws s3api create-bucket --bucket source-us-east-1-<accountid> --region us-east-1
 
 Package local artifacts
 ```
+cd infrastructure/
 aws cloudformation package --template-file ./deployment-template.json --s3-bucket source-us-east-1-<accountid> --force-upload --use-json --output-template-file packaged.json
 ```
 
