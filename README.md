@@ -89,7 +89,7 @@ Using powershell **invoke-webrequest** download the sample and CloudFormation te
 Invoke-WebRequest https://raw.githubusercontent.com/aws-samples/amazon-chime-voiceconnector-transcription/master/infrastructure/deployment-template.json -OutFile deployment-template.json
 ```
 ```powershell
-Invoke-WebRequest https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/v0.11.0/amazon-chime-voiceconnector-recordandtranscribe.zip -OutFile amazon-chime-voiceconnector-recordandtranscribe.zip
+Invoke-WebRequest https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/v0.12.0/amazon-chime-voiceconnector-recordandtranscribe.zip -OutFile amazon-chime-voiceconnector-recordandtranscribe.zip
 ```
 
 **macOS**
@@ -100,7 +100,7 @@ Using **wget** download the sample and CloudFormation template
 wget https://raw.githubusercontent.com/aws-samples/amazon-chime-voiceconnector-transcription/master/infrastructure/deployment-template.json
 ```
 ```
-wget https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/v0.11.0/amazon-chime-voiceconnector-recordandtranscribe.zip
+wget https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/download/v0.12.0/amazon-chime-voiceconnector-recordandtranscribe.zip
 ```
 > Missing Wget? Install using [brew](https://brew.sh/)
 >```
