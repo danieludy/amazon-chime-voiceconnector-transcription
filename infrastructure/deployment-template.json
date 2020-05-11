@@ -340,18 +340,6 @@
       },
       "Type": "AWS::IAM::Role"
     },
-    "SendRunTaskRequestLambdaFunctionVersion": {
-      "Condition": "CreateECS",
-      "Type": "AWS::Lambda::Version",
-      "Properties": {
-        "FunctionName": {
-          "Ref": "SendRunTaskRequestLambdaFunction"
-        },
-        "ProvisionedConcurrencyConfig": {
-          "ProvisionedConcurrentExecutions": 2
-        }
-      }
-    },
     "SendRunTaskRequestLambdaFunction": {
       "Condition": "CreateECS",
       "Type": "AWS::Lambda::Function",
@@ -452,7 +440,6 @@
     "SendRunTaskRequestLambdaEventMapping": {
       "Condition": "CreateECS",
       "Type": "AWS::Lambda::EventSourceMapping",
-      "DependsOn": ["SendRunTaskRequestLambdaFunctionVersion"],
       "Properties": {
           "Enabled": true,
           "EventSourceArn": {
@@ -461,9 +448,7 @@
               "Arn"
             ]
           },
-          "FunctionName": {
-            "Fn::Join": [":", [ { "Fn::GetAtt": [ "SendRunTaskRequestLambdaFunction", "Arn"] }, "1"]]
-          }
+          "FunctionName": { "Ref": "SendRunTaskRequestLambdaFunction" }
       }
     },
     "Vpc": {
