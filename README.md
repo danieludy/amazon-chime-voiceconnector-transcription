@@ -111,11 +111,37 @@ wget https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/re
 >>/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 >>```
 
+### (Optional) Configure AWS IAM User
+
+Create AWS IAM user to deploy the sample if administrative credential is not available
+
+Create IAM user with empty policy.
+```
+aws iam create-user --user-name chime-transcription-deployment-engineer
+```
+
+Create deployment policy.
+```
+aws iam create-policy --policy-name chime-transcription-deployment-policy --policy-document file://permission/policy.json
+```
+
+Attach the policy to the user.
+```
+aws iam attach-user-policy --user-name chime-transcription-deployment-engineer --policy-arn arn:aws:iam::<accountid>:policy/chime-transcription-deployment-policy
+```
+
+Create access key for the user. 
+> :warning: **Manage IAM user access keys properly and rotate the key frequently**
+```
+aws iam create-access-key --user-name chime-transcription-deployment-engineer
+```
+
+You have finished creating a user with deployment permissions.
 ### Deploying Sample
 
 Use [AWS Command Line Interface](https://aws.amazon.com/cli/) to deploy the sample
 
-Configure AWS Command Line Interface
+Configure AWS Command Line Interface. You can configure your access key from last step.
 ```
 aws configure
 ```
