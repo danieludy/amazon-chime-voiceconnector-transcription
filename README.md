@@ -113,7 +113,7 @@ wget https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/re
 
 ### (Optional) Configure AWS IAM User
 
-If administrative credential is not available, AWS account admin can use the following command to create a user for sample deployment, or grant the permission using the attached policy file.
+If administrative credential is not available, AWS account admin can use the following command to create a user for sample deployment, or grant the permission using the attached [policy file](permission/policy.json).
 
 Create IAM user with empty policy.
 ```
