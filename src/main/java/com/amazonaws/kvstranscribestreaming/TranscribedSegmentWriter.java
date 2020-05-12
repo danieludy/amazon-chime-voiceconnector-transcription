@@ -40,14 +40,16 @@ public class TranscribedSegmentWriter {
     private String speakerLabel;
     private final DynamoDB ddbClient;
     private final Boolean consoleLogTranscriptFlag;
+    private final Boolean isCaller;
     private static final String TABLE_TRANSCRIPT = "TranscriptSegment";
     private static final Logger logger = LoggerFactory.getLogger(TranscribedSegmentWriter.class);
 
-    public TranscribedSegmentWriter(String transactionId, String callId, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag) {
+    public TranscribedSegmentWriter(String transactionId, String callId, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag, Boolean isCaller) {
         this.transactionId = Validate.notNull(transactionId);
         this.callId = callId;
         this.ddbClient = Validate.notNull(ddbClient);
         this.consoleLogTranscriptFlag = Validate.notNull(consoleLogTranscriptFlag);
+        this.isCaller = isCaller;
 
         // initialize it to null so it's set on the first write
         // TODO:  this is a race condition nightmare so use the leg attribute once it's available
@@ -59,9 +61,15 @@ public class TranscribedSegmentWriter {
     }
 
     public String getSpeakerLabel() {
-        if (this.speakerLabel == null) {
-            this.speakerLabel = initSpeakerLabel();
+        // If isCaller is not avaiable, fall back to initial speaker label by querying DynamoDB.
+        if (this.isCaller == null) {
+            if (this.speakerLabel == null) {
+                this.speakerLabel = initSpeakerLabel();
+            }
+        } else {
+            this.speakerLabel = this.isCaller == Boolean.TRUE ? "spk_0" : "spk_1";
         }
+
         return this.speakerLabel;
     }
 
