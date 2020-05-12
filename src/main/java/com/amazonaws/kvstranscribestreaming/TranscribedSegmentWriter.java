@@ -62,11 +62,9 @@ public class TranscribedSegmentWriter {
 
     public String getSpeakerLabel() {
         // If isCaller is not avaiable, fall back to initial speaker label by querying DynamoDB.
-        if (this.isCaller == null) {
-            if (this.speakerLabel == null) {
-                this.speakerLabel = initSpeakerLabel();
-            }
-        } else {
+        if (this.isCaller == null && this.speakerLabel == null) {
+            this.speakerLabel = initSpeakerLabel();
+        } else if (this.isCaller != null) {
             this.speakerLabel = this.isCaller == Boolean.TRUE ? "spk_0" : "spk_1";
         }
 
