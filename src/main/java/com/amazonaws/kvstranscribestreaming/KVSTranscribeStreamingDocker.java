@@ -1,5 +1,7 @@
 package com.amazonaws.kvstranscribestreaming;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -46,31 +48,47 @@ public class KVSTranscribeStreamingDocker {
 
     private static Optional<TranscribeStreamingContext> constructStreamingDetail(String[] args) {
         final Options options = new Options();
-        options.addRequiredOption("a", "streamARN", true, "Stream ARN" );
-        options.addRequiredOption("f", "startFragmentNumber", true, "start fragement number");
-        options.addRequiredOption("i", "transactionId", true, "transaction Id. UUID");
-        options.addRequiredOption("c", "callId", true, "CallId. UUID");
-        options.addRequiredOption("s", "streamingStatus", true, "Streaming Status. i.e. STARTED, ENDED");
-        options.addRequiredOption("t", "startTime", true, "Streaming Start Time. Format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        options.addOption("a", "streamARN", true, "Stream ARN." );
+        options.addOption("f", "startFragmentNumber", true, "start fragement number");
+        options.addOption("i", "transactionId", true, "transaction Id. UUID");
+        options.addOption("c", "callId", true, "CallId. UUID");
+        options.addOption("s", "streamingStatus", true, "Streaming Status. i.e. STARTED, ENDED");
+        options.addOption("t", "startTime", true, "Streaming Start Time. Format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        options.addOption("e", "event", true, "Streaming event json file");
 
         final CommandLineParser parser = new DefaultParser();
-        TranscribeStreamingContext detail = null;
         try {
             final CommandLine line = parser.parse(options, args);
-            detail = new TranscribeStreamingContext.builder()
-                    .streamARN(line.getOptionValue("a"))
-                    .firstFragementNumber(line.getOptionValue("f"))
-                    .transactionId(line.getOptionValue("i"))
-                    .callId(line.getOptionValue("c"))
-                    .streamingStatus(line.getOptionValue("s"))
-                    .startTime(line.getOptionValue("t"))
-                    .transcriptionPlatform(TranscriptionPlatform.ECS)
-                    .build();
+
+            TranscribeStreamingContext detail;
+            final String stringifiedDetail = line.getOptionValue("e");
+            if(stringifiedDetail == null) {
+                 detail = TranscribeStreamingContext.builder()
+                        .streamArn(line.getOptionValue("a"))
+                        .startFragmentNumber(line.getOptionValue("f"))
+                        .transactionId(line.getOptionValue("i"))
+                        .callId(line.getOptionValue("c"))
+                        .streamingStatus(line.getOptionValue("s"))
+                        .startTime(line.getOptionValue("t"))
+                        .platform(TranscriptionPlatform.ECS)
+                        .build();
+                logger.warn("{} stringifiedDetail is null. Please update the infrastructure.", DOCKER_KEY_PREFIX);
+            } else {
+                // If event detail includes properties that are not in TranscribeStreamingContext, ignore them.
+                ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                detail = mapper.readValue(stringifiedDetail, TranscribeStreamingContext.class);
+                detail.setPlatform(TranscriptionPlatform.ECS);
+                logger.info("{} detail is {}", DOCKER_KEY_PREFIX, detail.toString());
+            }
+
+            return Optional.ofNullable(detail);
         } catch (final org.apache.commons.cli.ParseException e) {
             logger.error(DOCKER_KEY_PREFIX + "Unable to parse arguments. Reason: " + e.getMessage(), e);
+        } catch (final Exception e) {
+            logger.error(DOCKER_KEY_PREFIX + "Unable to process streaming event. Reason: " + e.getMessage(), e);
         }
 
-        return Optional.ofNullable(detail);
+        return Optional.empty();
     }
 }
 

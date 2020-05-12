@@ -59,14 +59,14 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
 
                 Map<String, String> detail = (Map) snsMessage.get("detail");
 
-                handler.handleRequest(new TranscribeStreamingContext.builder()
-                        .streamARN(detail.get("streamArn"))
-                        .firstFragementNumber(detail.get("startFragmentNumber"))
+                handler.handleRequest(TranscribeStreamingContext.builder()
+                        .streamArn(detail.get("streamArn"))
+                        .startFragmentNumber(detail.get("startFragmentNumber"))
                         .transactionId(detail.get("transactionId"))
                         .callId(detail.get("callId"))
                         .streamingStatus(detail.get("streamingStatus"))
                         .startTime(detail.get("startTime"))
-                        .transcriptionPlatform(TranscriptionPlatform.LAMBDA)
+                        .platform(TranscriptionPlatform.LAMBDA)
                         .build());
             }
         } catch (Exception e) {

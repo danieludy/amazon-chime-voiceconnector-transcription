@@ -1,5 +1,13 @@
 package com.amazonaws.kvstranscribestreaming;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.NonNull;
+
+import java.util.Map;
+
 /**
  * <p>
  * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -20,110 +28,24 @@ package com.amazonaws.kvstranscribestreaming;
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class TranscribeStreamingContext {
-    private String streamARN;
-    private String firstFragementNumber;
-    private String transactionId;
-    private String callId;
-    private String streamingStatus;
-    private String startTime;
-    private TranscriptionPlatform platform;
-
-    public TranscribeStreamingContext(final String streamARN,
-                           final String firstFragementNumber,
-                           final String transactionId,
-                           final String callId,
-                           final String streamingStatus,
-                           final String startTime, final TranscriptionPlatform platform
-    ) {
-        this.streamARN = streamARN;
-        this.firstFragementNumber = firstFragementNumber;
-        this.transactionId = transactionId;
-        this.callId = callId;
-        this.streamingStatus = streamingStatus;
-        this.startTime = startTime;
-        this.platform = platform;
-    }
-
-    public String streamARN() {
-        return streamARN;
-    }
-
-    public String firstFragementNumber() {
-        return firstFragementNumber;
-    }
-
-    public String transactionId() {
-        return transactionId;
-    }
-
-    public String callId() {
-        return callId;
-    }
-
-    public String streamingStatus() {
-        return streamingStatus;
-    }
-
-    public String startTime() {
-        return startTime;
-    }
-
-    public TranscriptionPlatform transcriptionPlatform() {
-        return platform;
-    }
-
-    static class builder {
-        private String streamARN;
-        private String firstFragementNumber;
-        private String transactionId;
-        private String callId;
-        private String streamingStatus;
-        private String startTime;
-        private TranscriptionPlatform platform;
-
-        public builder() {
-        }
-
-        public builder streamARN(final String streamARN) {
-            this.streamARN = streamARN;
-            return this;
-        }
-
-        public builder firstFragementNumber(final String firstFragementNumber) {
-            this.firstFragementNumber = firstFragementNumber;
-            return this;
-        }
-
-        public builder transactionId(final String transactionId) {
-            this.transactionId = transactionId;
-            return this;
-        }
-
-        public builder callId(final String callId) {
-            this.callId = callId;
-            return this;
-        }
-
-        public builder streamingStatus(final String streamingStatus) {
-            this.streamingStatus = streamingStatus;
-            return this;
-        }
-
-        public builder startTime(final String startTime) {
-            this.startTime = startTime;
-            return this;
-        }
-
-        public builder transcriptionPlatform(final TranscriptionPlatform platform) {
-            this.platform = platform;
-            return this;
-        }
-
-        public TranscribeStreamingContext build() {
-            return new TranscribeStreamingContext(streamARN, firstFragementNumber, transactionId, callId, streamingStatus, startTime, platform);
-        }
-    }
-
-
+    // Keep the property name consistent with the name in streaming event detail.
+    @NonNull private String streamArn;
+    @NonNull private String startFragmentNumber;
+    @NonNull private String transactionId;
+    @NonNull private String callId;
+    @NonNull private String streamingStatus;
+    @NonNull private String startTime;
+    @NonNull private TranscriptionPlatform platform;
+    @NonNull private String voiceConnectorId;
+    @NonNull private String direction;
+    @NonNull private String mediaType;
+    private Map<String, String> inviteHeaders;
+    private String fromNumber;
+    private String toNumber;
+    private Boolean isCaller;
 }

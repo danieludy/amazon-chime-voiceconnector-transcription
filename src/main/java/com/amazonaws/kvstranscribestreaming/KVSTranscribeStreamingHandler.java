@@ -94,13 +94,13 @@ public class KVSTranscribeStreamingHandler {
 
     public String handleRequest(final TranscribeStreamingContext context) {
         try {
-            final String streamARN = context.streamARN();
-            final String firstFragementNumber = context.firstFragementNumber();
-            final String transactionId = context.transactionId();
-            final String callId = context.callId();
-            final String streamingStatus = context.streamingStatus();
-            final String startTime = context.startTime();
-            final TranscriptionPlatform solutionType = context.transcriptionPlatform();
+            final String streamARN = context.getStreamArn();
+            final String firstFragementNumber = context.getStartFragmentNumber();
+            final String transactionId = context.getTransactionId();
+            final String callId = context.getCallId();
+            final String streamingStatus = context.getStreamingStatus();
+            final String startTime = context.getStartTime();
+            final TranscriptionPlatform solutionType = context.getPlatform();
 
             if (streamingStatus.equals("STARTED")) {
 
