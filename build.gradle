@@ -33,7 +33,7 @@ dependencies {
             'org.apache.commons:commons-lang3:3.6',
 
             // need for argument parsing
-            'commons-cli:commons-cli:1.4',
+            'commons-cli:commons-cli:1.4'
     )
 }
 
