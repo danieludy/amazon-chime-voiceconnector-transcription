@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'com.bmuschko.docker-remote-api' version '6.4.0'
-    id 'io.freefair.lombok' version '5.0.1'
+    id "io.freefair.lombok" version "5.0.1"
 }
 
 import com.bmuschko.gradle.docker.tasks.image.Dockerfile
@@ -34,8 +34,6 @@ dependencies {
 
             // need for argument parsing
             'commons-cli:commons-cli:1.4',
-
-            'org.projectlombok:lombok:1.18.12'
     )
 }
 

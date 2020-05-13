@@ -3,12 +3,12 @@ package com.amazonaws.kvstranscribestreaming;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.SQSEvent;
+import com.amazonaws.streamingeventmodel.Platform;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.Map;
 
 /**
  * Demonstrate Amazon VoiceConnectors's real-time transcription feature using
@@ -53,13 +53,10 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
 
         try {
             for (SQSEvent.SQSMessage sqsMessage : event.getRecords()) {
-                KVSTranscribeStreamingHandler handler = new KVSTranscribeStreamingHandler();
+                KVSTranscribeStreamingHandler handler = new KVSTranscribeStreamingHandler(Platform.LAMBDA);
 
-                Map<String, Object> snsMessage = objectMapper.readValue(sqsMessage.getBody(), Map.class);
-
-                Map<String, String> detail = (Map) snsMessage.get("detail");
-
-                handler.handleRequest(objectMapper.convertValue(detail, TranscribeStreamingContext.class));
+                logger.info("body from sqs message {}", sqsMessage.getBody());
+                handler.handleRequest(sqsMessage.getBody());
             }
         } catch (Exception e) {
             logger.error(LAMBDA_KEY_PREFIX + " KVS to Transcribe Streaming failed with: ", e);

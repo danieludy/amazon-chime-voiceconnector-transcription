@@ -4,6 +4,7 @@ import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
 import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
+import com.amazonaws.streamingeventmodel.StreamingStatusStartedDetail;
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,12 +45,12 @@ public class TranscribedSegmentWriter {
     private static final String TABLE_TRANSCRIPT = "TranscriptSegment";
     private static final Logger logger = LoggerFactory.getLogger(TranscribedSegmentWriter.class);
 
-    public TranscribedSegmentWriter(String transactionId, String callId, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag, Boolean isCaller) {
-        this.transactionId = Validate.notNull(transactionId);
-        this.callId = callId;
+    public TranscribedSegmentWriter(StreamingStatusStartedDetail streamingStatusStartedDetail, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag) {
+        this.transactionId = Validate.notNull(streamingStatusStartedDetail.getTransactionId());
+        this.callId = streamingStatusStartedDetail.getCallId();
         this.ddbClient = Validate.notNull(ddbClient);
         this.consoleLogTranscriptFlag = Validate.notNull(consoleLogTranscriptFlag);
-        this.isCaller = isCaller;
+        this.isCaller = streamingStatusStartedDetail.getIsCaller();
 
         // initialize it to null so it's set on the first write
         // TODO:  this is a race condition nightmare so use the leg attribute once it's available

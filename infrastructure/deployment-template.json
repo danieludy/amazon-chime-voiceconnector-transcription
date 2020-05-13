@@ -369,7 +369,7 @@
                   "          {",
                   "            command: [",
                   "              '-e',",
-                  "              JSON.stringify(detail)",
+                  "              event.Records[0].body",
                   "            ],",
                   "            environment: [",
                   "              {",
