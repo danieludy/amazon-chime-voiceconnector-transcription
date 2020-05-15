@@ -3,7 +3,6 @@ package com.amazonaws.kvstranscribestreaming;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.SQSEvent;
-import com.amazonaws.streamingeventmodel.Platform;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,12 +51,21 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
         logger.info(LAMBDA_KEY_PREFIX + " received context: " + context.toString());
 
         try {
-            for (SQSEvent.SQSMessage sqsMessage : event.getRecords()) {
-                KVSTranscribeStreamingHandler handler = new KVSTranscribeStreamingHandler(Platform.LAMBDA);
-
-                logger.info("body from sqs message {}", sqsMessage.getBody());
-                handler.handleRequest(sqsMessage.getBody());
+            event.getRecords().forEach(msg -> {
+                logger.info("Received streaming message  : " + msg.getBody());
+            });
+            if (event.getRecords().size() != 1) {
+                logger.error("Invalid number of records present in the SQS message body");
+                throw new RuntimeException("Invalid number of records");
             }
+
+            SQSEvent.SQSMessage sqsMessage = event.getRecords().get(0);
+            logger.info("SQS message body: {} ", sqsMessage.getBody());
+
+            KVSTranscribeStreamingHandler handler = new KVSTranscribeStreamingHandler(Platform.LAMBDA);
+
+            logger.info("body from sqs message {}", sqsMessage.getBody());
+            handler.handleRequest(sqsMessage.getBody());
         } catch (Exception e) {
             logger.error(LAMBDA_KEY_PREFIX + " KVS to Transcribe Streaming failed with: ", e);
             return "{ \"result\": \"Failed\" }";

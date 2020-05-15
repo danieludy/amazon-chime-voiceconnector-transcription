@@ -9,7 +9,6 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
-import com.amazonaws.streamingeventmodel.Platform;
 import com.amazonaws.streamingeventmodel.StreamingStatus;
 import com.amazonaws.streamingeventmodel.StreamingStatusStartedDetail;
 import com.amazonaws.transcribestreaming.KVSByteToAudioEventSubscription;
@@ -111,8 +110,8 @@ public class KVSTranscribeStreamingHandler {
     public String handleRequest(String eventBody) {
         try {
 
-            Map<String, Object> snsMessage = objectMapper.readValue(eventBody, Map.class);
-            Map<String, String> eventDetail = (Map) snsMessage.get("detail");
+            Map<String, Object> eventBodyMap = objectMapper.readValue(eventBody, Map.class);
+            Map<String, String> eventDetail = (Map) eventBodyMap.get("detail");
 
             String streamingStatus = eventDetail.get("streamingStatus");
             String transactionId = eventDetail.get("transactionId");

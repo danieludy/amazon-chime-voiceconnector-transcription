@@ -1,9 +1,4 @@
-package com.amazonaws.streamingeventmodel;
-
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.ToString;
+package com.amazonaws.kvstranscribestreaming;
 
 /*
  * <p>Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.</p>
@@ -21,11 +16,7 @@ import lombok.ToString;
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-@Getter
-@Builder
-@ToString
-@JsonPropertyOrder(alphabetic=true)
-public class Sdp {
-    private int mediaIndex;
-    private String mediaLabel;
+public enum Platform {
+    LAMBDA,
+    ECS
 }
