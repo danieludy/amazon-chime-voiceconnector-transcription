@@ -9,10 +9,14 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
+import com.amazonaws.streamingeventmodel.StreamingStatus;
+import com.amazonaws.streamingeventmodel.StreamingStatusStartedDetail;
 import com.amazonaws.transcribestreaming.KVSByteToAudioEventSubscription;
 import com.amazonaws.transcribestreaming.StreamTranscriptionBehaviorImpl;
 import com.amazonaws.transcribestreaming.TranscribeStreamingRetryClient;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
@@ -35,6 +39,7 @@ import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -89,31 +94,37 @@ public class KVSTranscribeStreamingHandler {
     // SegmentWriter saves Transcription segments to DynamoDB
     private TranscribedSegmentWriter segmentWriter = null;
 
+    private final Platform platform;
+    private final Boolean shouldWriteAudioToFile = Boolean.TRUE;
+
     private static final DynamoDB dynamoDB = new DynamoDB(
             AmazonDynamoDBClientBuilder.standard().withRegion(REGION.getName()).build());
 
-    public String handleRequest(final TranscribeStreamingContext context) {
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    public KVSTranscribeStreamingHandler(final Platform platform) {
+        this.platform = platform;
+    }
+
+    public String handleRequest(String eventBody) {
         try {
-            final String streamARN = context.streamARN();
-            final String firstFragementNumber = context.firstFragementNumber();
-            final String transactionId = context.transactionId();
-            final String callId = context.callId();
-            final String streamingStatus = context.streamingStatus();
-            final String startTime = context.startTime();
-            final TranscriptionPlatform solutionType = context.transcriptionPlatform();
 
-            if (streamingStatus.equals("STARTED")) {
+            Map<String, Object> eventBodyMap = objectMapper.readValue(eventBody, Map.class);
+            Map<String, String> eventDetail = (Map) eventBodyMap.get("detail");
 
-                logger.info("Received STARTED event");
+            String streamingStatus = eventDetail.get("streamingStatus");
+            String transactionId = eventDetail.get("transactionId");
+            logger.info("Received STARTED event");
 
-                // create a SegmentWriter to be able to save off transcription results
-                segmentWriter = new TranscribedSegmentWriter(transactionId, callId, dynamoDB, CONSOLE_LOG_TRANSCRIPT_FLAG);
-
-                startKVSToTranscribeStreaming(streamARN, firstFragementNumber, transactionId,
-                        Boolean.valueOf(IS_TRANSCRIBE_ENABLED), true, callId, startTime, solutionType);
-                logger.info("Finished processing request");
+            if (StreamingStatus.STARTED.name().equals(streamingStatus)) {
+                final StreamingStatusStartedDetail streamingStatusStartedDetail = objectMapper.convertValue(eventDetail,
+                        StreamingStatusStartedDetail.class);
+                logger.info("[{}] Streaming status {} , EventDetail: {}", transactionId, streamingStatus, streamingStatusStartedDetail);
+                startKVSToTranscribeStreaming(streamingStatusStartedDetail);
             }
 
+            logger.info("Finished processing request");
         } catch (Exception e) {
             logger.error("KVS to Transcribe Streaming failed with: ", e);
             return "{ \"result\": \"Failed\" }";
@@ -126,20 +137,23 @@ public class KVSTranscribeStreamingHandler {
      * continuously saved to the Dynamo DB table At end of the streaming session,
      * the raw audio is saved as an s3 object
      *
-     * @param streamName
-     * @param startFragmentNum
-     * @param transactionId
-     * @param callId
+     * @param detail
      * @throws Exception
      */
-    private void startKVSToTranscribeStreaming(String streamName, String startFragmentNum, String transactionId,
-            boolean transcribeEnabled, boolean shouldWriteAudioToFile, final String callId, final String startTime, final TranscriptionPlatform platform) throws Exception {
+    private void startKVSToTranscribeStreaming(StreamingStatusStartedDetail detail) throws Exception {
+
+        final String transactionId = detail.getTransactionId();
+        final String callId = detail.getCallId();
+        final String streamArn = detail.getStreamArn();
+        final String startFragmentNumber = detail.getStartFragmentNumber();
+        final String startTime = detail.getStartTime();
+
 
         Path saveAudioFilePath = Paths.get("/tmp",
                 transactionId + "_" + callId + "_" + DATE_FORMAT.format(new Date()) + ".raw");
         FileOutputStream fileOutputStream = new FileOutputStream(saveAudioFilePath.toString());
 
-        InputStream kvsInputStream = KVSUtils.getInputStreamFromKVS(streamName, REGION, startFragmentNum,
+        InputStream kvsInputStream = KVSUtils.getInputStreamFromKVS(streamArn, REGION, startFragmentNumber,
                 getAWSCredentials());
         StreamingMkvReader streamingMkvReader = StreamingMkvReader
                 .createDefault(new InputStreamParserByteSource(kvsInputStream));
@@ -147,24 +161,25 @@ public class KVSTranscribeStreamingHandler {
         KVSTransactionIdTagProcessor tagProcessor = new KVSTransactionIdTagProcessor(transactionId);
         FragmentMetadataVisitor fragmentVisitor = FragmentMetadataVisitor.create(Optional.of(tagProcessor));
 
-        if (transcribeEnabled) {
+        if (Boolean.valueOf(IS_TRANSCRIBE_ENABLED)) {
             try (TranscribeStreamingRetryClient client = new TranscribeStreamingRetryClient(getTranscribeCredentials(),
                     TRANSCRIBE_ENDPOINT, TRANSCRIBE_REGION, metricsUtil)) {
 
                 logger.info("Calling Transcribe service..");
 
+                segmentWriter = new TranscribedSegmentWriter(detail, dynamoDB, CONSOLE_LOG_TRANSCRIPT_FLAG);
                 CompletableFuture<Void> result = client.startStreamTranscription(
                         // since we're definitely working with telephony audio, we know that's 8 kHz
                         getRequest(8000),
                         new KVSAudioStreamPublisher(streamingMkvReader, transactionId, fileOutputStream, tagProcessor,
-                                fragmentVisitor, shouldWriteAudioToFile),
+                                fragmentVisitor, this.shouldWriteAudioToFile),
                         new StreamTranscriptionBehaviorImpl(segmentWriter));
 
                 // There is no timeout limit for transcription running on ECS. Since Lambda doesn't support function with more than 15 mins
                 // Set up a timeout here so that there is enough time for the audio to be uploaded in S3 before function got destoryed.
-                if(platform.equals(TranscriptionPlatform.ECS)) {
+                if(this.platform.equals(Platform.ECS)) {
                     result.get();
-                } else if(platform.equals(TranscriptionPlatform.LAMBDA)){
+                } else if(this.platform.equals(Platform.LAMBDA)){
                     result.get(LAMBDA_RECORDING_TIMEOUT_IN_SECOND, TimeUnit.SECONDS);
                 }
             } catch (TimeoutException e) {
@@ -174,7 +189,7 @@ public class KVSTranscribeStreamingHandler {
                 throw e;
 
             } finally {
-                if (shouldWriteAudioToFile) {
+                if (this.shouldWriteAudioToFile) {
                     closeFileAndUploadRawAudio(kvsInputStream, fileOutputStream, saveAudioFilePath, transactionId, startTime);
                 }
             }

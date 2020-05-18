@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.Map;
 
 /**
  * Demonstrate Amazon VoiceConnectors's real-time transcription feature using
@@ -52,23 +51,21 @@ public class KVSTranscribeStreamingLambda implements RequestHandler<SQSEvent, St
         logger.info(LAMBDA_KEY_PREFIX + " received context: " + context.toString());
 
         try {
-            for (SQSEvent.SQSMessage sqsMessage : event.getRecords()) {
-                KVSTranscribeStreamingHandler handler = new KVSTranscribeStreamingHandler();
-
-                Map<String, Object> snsMessage = objectMapper.readValue(sqsMessage.getBody(), Map.class);
-
-                Map<String, String> detail = (Map) snsMessage.get("detail");
-
-                handler.handleRequest(new TranscribeStreamingContext.builder()
-                        .streamARN(detail.get("streamArn"))
-                        .firstFragementNumber(detail.get("startFragmentNumber"))
-                        .transactionId(detail.get("transactionId"))
-                        .callId(detail.get("callId"))
-                        .streamingStatus(detail.get("streamingStatus"))
-                        .startTime(detail.get("startTime"))
-                        .transcriptionPlatform(TranscriptionPlatform.LAMBDA)
-                        .build());
+            event.getRecords().forEach(msg -> {
+                logger.info("Received streaming message  : " + msg.getBody());
+            });
+            if (event.getRecords().size() != 1) {
+                logger.error("Invalid number of records present in the SQS message body");
+                throw new RuntimeException("Invalid number of records");
             }
+
+            SQSEvent.SQSMessage sqsMessage = event.getRecords().get(0);
+            logger.info("SQS message body: {} ", sqsMessage.getBody());
+
+            KVSTranscribeStreamingHandler handler = new KVSTranscribeStreamingHandler(Platform.LAMBDA);
+
+            logger.info("body from sqs message {}", sqsMessage.getBody());
+            handler.handleRequest(sqsMessage.getBody());
         } catch (Exception e) {
             logger.error(LAMBDA_KEY_PREFIX + " KVS to Transcribe Streaming failed with: ", e);
             return "{ \"result\": \"Failed\" }";
