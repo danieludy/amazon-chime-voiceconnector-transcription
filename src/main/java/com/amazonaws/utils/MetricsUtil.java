@@ -1,4 +1,4 @@
-package com.amazonaws.kvstranscribestreaming;
+package com.amazonaws.utils;
 
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.model.MetricDatum;

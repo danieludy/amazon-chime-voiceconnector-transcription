@@ -23,4 +23,8 @@ public interface StreamingStatusDetail {
     StreamingStatus getStreamingStatus();
     Direction getDirection();
     String getVersion();
+    String getStreamArn();
+    String getFromNumber();
+    String getToNumber();
+    Boolean getIsCaller();
 }

@@ -2,6 +2,7 @@ package com.amazonaws.kvstranscribestreaming;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.constants.Platform;
 import com.amazonaws.kinesisvideo.parser.ebml.InputStreamParserByteSource;
 import com.amazonaws.kinesisvideo.parser.mkv.StreamingMkvReader;
 import com.amazonaws.kinesisvideo.parser.utilities.FragmentMetadataVisitor;
@@ -11,10 +12,16 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.streamingeventmodel.StreamingStatus;
 import com.amazonaws.streamingeventmodel.StreamingStatusStartedDetail;
+import com.amazonaws.transcribepublishing.DynamoDBTranscriptionPublisher;
+import com.amazonaws.transcribepublishing.TranscriptionPublisher;
+import com.amazonaws.transcribepublishing.WebSocketTranscriptionPublisher;
 import com.amazonaws.transcribestreaming.KVSByteToAudioEventSubscription;
 import com.amazonaws.transcribestreaming.StreamTranscriptionBehaviorImpl;
 import com.amazonaws.transcribestreaming.TranscribeStreamingRetryClient;
 
+import com.amazonaws.utils.AudioUtils;
+import com.amazonaws.utils.KVSUtils;
+import com.amazonaws.utils.MetricsUtil;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.reactivestreams.Publisher;
@@ -38,7 +45,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -90,9 +99,6 @@ public class KVSTranscribeStreamingHandler {
     private static final Logger logger = LoggerFactory.getLogger(KVSTranscribeStreamingHandler.class);
     public static final MetricsUtil metricsUtil = new MetricsUtil(AmazonCloudWatchClientBuilder.defaultClient());
     private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-
-    // SegmentWriter saves Transcription segments to DynamoDB
-    private TranscribedSegmentWriter segmentWriter = null;
 
     private final Platform platform;
     private final Boolean shouldWriteAudioToFile = Boolean.TRUE;
@@ -161,19 +167,21 @@ public class KVSTranscribeStreamingHandler {
         KVSTransactionIdTagProcessor tagProcessor = new KVSTransactionIdTagProcessor(transactionId);
         FragmentMetadataVisitor fragmentVisitor = FragmentMetadataVisitor.create(Optional.of(tagProcessor));
 
-        if (Boolean.valueOf(IS_TRANSCRIBE_ENABLED)) {
+        if (Boolean.parseBoolean(IS_TRANSCRIBE_ENABLED)) {
             try (TranscribeStreamingRetryClient client = new TranscribeStreamingRetryClient(getTranscribeCredentials(),
                     TRANSCRIBE_ENDPOINT, TRANSCRIBE_REGION, metricsUtil)) {
 
                 logger.info("Calling Transcribe service..");
 
-                segmentWriter = new TranscribedSegmentWriter(detail, dynamoDB, CONSOLE_LOG_TRANSCRIPT_FLAG);
+                List<TranscriptionPublisher> publishers = Arrays.asList(new WebSocketTranscriptionPublisher(dynamoDB, detail, getAWSCredentials()),
+                        new DynamoDBTranscriptionPublisher(detail, dynamoDB, CONSOLE_LOG_TRANSCRIPT_FLAG));
+
                 CompletableFuture<Void> result = client.startStreamTranscription(
                         // since we're definitely working with telephony audio, we know that's 8 kHz
                         getRequest(8000),
                         new KVSAudioStreamPublisher(streamingMkvReader, transactionId, fileOutputStream, tagProcessor,
                                 fragmentVisitor, this.shouldWriteAudioToFile),
-                        new StreamTranscriptionBehaviorImpl(segmentWriter));
+                        new StreamTranscriptionBehaviorImpl(publishers));
 
                 // There is no timeout limit for transcription running on ECS. Since Lambda doesn't support function with more than 15 mins
                 // Set up a timeout here so that there is enough time for the audio to be uploaded in S3 before function got destoryed.

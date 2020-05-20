@@ -1,4 +1,4 @@
-package com.amazonaws.kvstranscribestreaming;
+package com.amazonaws.constants;
 
 /*
  * <p>Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.</p>

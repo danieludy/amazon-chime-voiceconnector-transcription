@@ -1,10 +1,10 @@
-package com.amazonaws.kvstranscribestreaming;
+package com.amazonaws.transcribepublishing;
 
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
 import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
-import com.amazonaws.streamingeventmodel.StreamingStatusStartedDetail;
+import com.amazonaws.streamingeventmodel.StreamingStatusDetail;
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +15,7 @@ import java.text.NumberFormat;
 import java.time.Instant;
 import java.util.List;
 
-import static com.amazonaws.kvstranscribestreaming.DynamoDBConstants.*;
+import static com.amazonaws.constants.TranscribeDDBConstants.*;
 
 /**
  * TranscribedSegmentWriter writes the transcript segments to DynamoDB
@@ -35,7 +35,7 @@ import static com.amazonaws.kvstranscribestreaming.DynamoDBConstants.*;
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-public class TranscribedSegmentWriter {
+public class DynamoDBTranscriptionPublisher implements TranscriptionPublisher {
     private final String transactionId;
     private final String callId;
     private String speakerLabel;
@@ -43,9 +43,9 @@ public class TranscribedSegmentWriter {
     private final Boolean consoleLogTranscriptFlag;
     private final Boolean isCaller;
     private static final String TABLE_TRANSCRIPT = "TranscriptSegment";
-    private static final Logger logger = LoggerFactory.getLogger(TranscribedSegmentWriter.class);
+    private static final Logger logger = LoggerFactory.getLogger(DynamoDBTranscriptionPublisher.class);
 
-    public TranscribedSegmentWriter(StreamingStatusStartedDetail streamingStatusStartedDetail, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag) {
+    public DynamoDBTranscriptionPublisher(StreamingStatusDetail streamingStatusStartedDetail, DynamoDB ddbClient, Boolean consoleLogTranscriptFlag) {
         this.transactionId = Validate.notNull(streamingStatusStartedDetail.getTransactionId());
         this.callId = streamingStatusStartedDetail.getCallId();
         this.ddbClient = Validate.notNull(ddbClient);
@@ -57,11 +57,11 @@ public class TranscribedSegmentWriter {
         this.speakerLabel = null;
     }
 
-    public String getTransactionId() {
+    private String getTransactionId() {
         return this.transactionId;
     }
 
-    public String getSpeakerLabel() {
+    private String getSpeakerLabel() {
         // If isCaller is not avaiable, fall back to initial speaker label by querying DynamoDB.
         if (this.isCaller == null && this.speakerLabel == null) {
             this.speakerLabel = initSpeakerLabel();
@@ -72,11 +72,12 @@ public class TranscribedSegmentWriter {
         return this.speakerLabel;
     }
 
-    public DynamoDB getDdbClient() {
+    private DynamoDB getDdbClient() {
         return this.ddbClient;
     }
 
-    public void writeToDynamoDB(TranscriptEvent transcriptEvent) {
+    @Override
+    public void publish(TranscriptEvent transcriptEvent) {
         List<Result> results = transcriptEvent.transcript().results();
         if (results.size() > 0) {
 
@@ -101,13 +102,14 @@ public class TranscribedSegmentWriter {
      * Transcribe website looks for Final event in DynamoDB payload to stop polling for messages. This is workaround
      * to display end of streaming.
      */
-    public void writeTranscribeDoneToDynamoDB() {
+    @Override
+    public void publishDone() {
         Instant now = Instant.now();
         logger.info("writing end of transcription to DDB for " + this.transactionId);
         Item ddbItem = new Item()
-            .withKeyComponent(DynamoDBConstants.TRANSACTION_ID, this.transactionId)
+            .withKeyComponent(TRANSACTION_ID, this.transactionId)
             .withKeyComponent(START_TIME, now.getEpochSecond())
-            .withString(DynamoDBConstants.CALL_ID, this.callId)
+            .withString(CALL_ID, this.callId)
             .withString(TRANSCRIPT, "END_OF_TRANSCRIPTION")
             // LoggedOn is an ISO-8601 string representation of when the entry was created
             .withString(LOGGED_ON, now.toString())
@@ -130,7 +132,7 @@ public class TranscribedSegmentWriter {
 
         QuerySpec spec = new QuerySpec()
             .withMaxResultSize(1)
-            .withKeyConditionExpression(DynamoDBConstants.TRANSACTION_ID + " = :id")
+            .withKeyConditionExpression(TRANSACTION_ID + " = :id")
             .withValueMap(new ValueMap().withString(":id", getTransactionId()));
 
         if (getDdbClient().getTable(TABLE_TRANSCRIPT).query(spec).iterator().hasNext()) {
@@ -148,9 +150,9 @@ public class TranscribedSegmentWriter {
         if (result.alternatives().size() > 0) {
             if (!result.alternatives().get(0).transcript().isEmpty()) {
                 ddbItem = new Item()
-                        .withKeyComponent(DynamoDBConstants.TRANSACTION_ID, this.transactionId)
+                        .withKeyComponent(TRANSACTION_ID, this.transactionId)
                         .withKeyComponent(START_TIME, result.startTime())
-                        .withString(DynamoDBConstants.CALL_ID, this.callId)
+                        .withString(CALL_ID, this.callId)
                         .withString(SPEAKER, getSpeakerLabel())
                         .withDouble(END_TIME, result.endTime())
                         .withString(SEGMENT_ID, result.resultId())

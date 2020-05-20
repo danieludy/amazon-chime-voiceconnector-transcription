@@ -3,7 +3,7 @@ package com.amazonaws.transcribestreaming;
 import com.amazonaws.kinesisvideo.parser.mkv.StreamingMkvReader;
 import com.amazonaws.kinesisvideo.parser.utilities.FragmentMetadataVisitor;
 import com.amazonaws.kvstranscribestreaming.KVSTransactionIdTagProcessor;
-import com.amazonaws.kvstranscribestreaming.KVSUtils;
+import com.amazonaws.utils.KVSUtils;
 import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;

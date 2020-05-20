@@ -1,6 +1,6 @@
 package com.amazonaws.transcribestreaming;
 
-import com.amazonaws.kvstranscribestreaming.MetricsUtil;
+import com.amazonaws.utils.MetricsUtil;
 import com.amazonaws.regions.Regions;
 import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Publisher;

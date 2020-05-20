@@ -1,5 +1,6 @@
 package com.amazonaws.kvstranscribestreaming;
 
+import com.amazonaws.constants.Platform;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.cli.CommandLine;
