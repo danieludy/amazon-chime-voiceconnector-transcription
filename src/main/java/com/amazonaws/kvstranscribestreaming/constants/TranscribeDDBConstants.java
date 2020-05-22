@@ -1,4 +1,4 @@
-package com.amazonaws.constants;
+package com.amazonaws.kvstranscribestreaming.constants;
 
 public class TranscribeDDBConstants {
     public static final String TRANSACTION_ID = "TransactionId";

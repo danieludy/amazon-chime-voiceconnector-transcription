@@ -197,7 +197,7 @@
       "Properties": {
         "ContainerDefinitions": [
           {
-            "EntryPoint": ["java","-cp",".:/tmp/chime-streaming-transcribe/lib/*","com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingDocker"],
+            "EntryPoint": ["java","-cp",".:/tmp/chime-streaming-transcribe/lib/*","com.amazonaws.kvstranscribestreaming.docker.KVSTranscribeStreamingDocker"],
             "Image": {
               "Ref": "DockerImage"
             },
@@ -331,84 +331,10 @@
     },
     "SendRunTaskRequestLambdaFunction": {
       "Condition": "CreateECS",
-      "Type": "AWS::Lambda::Function",
+      "Type": "AWS::Serverless::Function",
       "Properties": {
-        "Code": {
-          "ZipFile": { "Fn::Join": ["\n", [
-                  "const AWS = require('aws-sdk');",
-                  "exports.handler = async (event, context) => {",
-                  "  const { ",
-                  "    RUNNER, ",
-                  "    IS_TRANSCRIBE_ENABLED, ",
-                  "    RECORDINGS_BUCKET_NAME, ",
-                  "    REGION, ",
-                  "    CLUSTER_NAME, ",
-                  "    CONTAINER_NAME,",
-                  "    WEBSOCKET_MAPPING_TABLE_NAME,",
-                  "    TRANSCRIBE_API_GATEWAY_APIID,",
-                  "    TRANSCRIBE_API_GATEWAY_STAGE",
-                  "  } = process.env;",
-                  "  const resp = {",
-                  "    'statusCode': '200',",
-                  "    'body': JSON.stringify('success')",
-                  "  };",
-                  "  if(event.Records.length !== 1) {",
-                  "    resp.body = JSON.stringify('Invalid number of records present in the SQS message body');",
-                  "    return resp;",
-                  "  }",
-                  "  const detail = JSON.parse(event.Records[0].body).detail;",
-                  "  console.log(JSON.stringify(detail));",
-                  "  if(detail.streamingStatus === 'STARTED') {",
-                  "    const runParams = {",
-                  "      taskDefinition: RUNNER,",
-                  "      launchType: 'EC2',",
-                  "      cluster: CLUSTER_NAME,",
-                  "      overrides: {",
-                  "        containerOverrides: [",
-                  "          {",
-                  "            command: [",
-                  "              '-e',",
-                  "              event.Records[0].body",
-                  "            ],",
-                  "            environment: [",
-                  "              {",
-                  "                name: 'IS_TRANSCRIBE_ENABLED',",
-                  "                value: IS_TRANSCRIBE_ENABLED",
-                  "              },",
-                  "              {",
-                  "                name: 'RECORDINGS_BUCKET_NAME',",
-                  "                value: RECORDINGS_BUCKET_NAME",
-                  "              },",
-                  "              {",
-                  "                name: 'AWS_REGION',",
-                  "                value: REGION",
-                  "              },",
-                  "              {",
-                  "                name: 'WEBSOCKET_MAPPING_TABLE_NAME',",
-                  "                value: WEBSOCKET_MAPPING_TABLE_NAME",
-                  "              },",
-                  "              {",
-                  "                name: 'TRANSCRIBE_API_GATEWAY_APIID',",
-                  "                value: TRANSCRIBE_API_GATEWAY_APIID",
-                  "              },",
-                  "              {",
-                  "                name: 'TRANSCRIBE_API_GATEWAY_STAGE',",
-                  "                value: TRANSCRIBE_API_GATEWAY_STAGE",
-                  "              }",
-                  "            ],",
-                  "            name: CONTAINER_NAME",
-                  "          },",
-                  "        ],",
-                  "      },",
-                  "    };",
-                  "    console.log('run parameter ',JSON.stringify(runParams));",
-                  "    const result = await new AWS.ECS().runTask(runParams).promise();",
-                  "    resp.body = JSON.stringify(result);",
-                  "  }",
-                  "  return resp;",
-                  "};"
-              ]]}
-        },
+        "AutoPublishAlias": "Provisioned",
+        "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
         "Environment": {
           "Variables": {
             "CLUSTER_NAME": {
@@ -418,47 +344,48 @@
             "RECORDINGS_BUCKET_NAME": {
               "Ref": "RecordingBucket"
             },
-            "REGION": {
-              "Ref": "AWS::Region"
-            },
-            "RUNNER": {
+            "TASK_DEFINITION": {
               "Ref": "TranscribeTaskDefinition"
             },
             "CONTAINER_NAME": "transcribe-container",
             "TRANSCRIBE_API_GATEWAY_APIID": {
-              "Ref": "WebSocketTranscriptionAPI"
+              "Ref": "TranscriptionWebSocketAPI"
             },
             "TRANSCRIBE_API_GATEWAY_STAGE": {
-              "Ref": "WebSocketAPIStage"
+              "Ref": "TranscriptionWebSocketAPIStage"
             },
             "WEBSOCKET_MAPPING_TABLE_NAME": {
-              "Ref": "WebSocketMappingTable"
+              "Ref": "TranscriptionWebsocketMappingTable"
             }
           }
         },
-        "Handler": "index.handler",
+        "Handler": "com.amazonaws.kvstranscribestreaming.lambda.SendRunTaskRequestLambda::handleRequest",
         "Role": {
           "Fn::GetAtt": [
             "SendRunTaskRequestExecutionRole",
             "Arn"
           ]
         },
-        "Runtime": "nodejs12.x",
-        "Timeout": 3
-      }
-    },
-    "SendRunTaskRequestLambdaEventMapping": {
-      "Condition": "CreateECS",
-      "Type": "AWS::Lambda::EventSourceMapping",
-      "Properties": {
-          "Enabled": true,
-          "EventSourceArn": {
-            "Fn::GetAtt": [
-              "EventSQS",
-              "Arn"
-            ]
-          },
-          "FunctionName": { "Ref": "SendRunTaskRequestLambdaFunction" }
+        "Events": {
+          "EventQueue": {
+            "Type": "SQS",
+            "Properties": {
+              "Queue": {
+                "Fn::GetAtt": [
+                  "EventSQS",
+                  "Arn"
+                ]
+              },
+              "BatchSize": 1
+            }
+          }
+        },
+        "Runtime": "java11",
+        "MemorySize": 256,
+        "Timeout": 10,
+        "ProvisionedConcurrencyConfig" : {
+          "ProvisionedConcurrentExecutions" : 2
+        }
       }
     },
     "Vpc": {
@@ -746,7 +673,7 @@
         "AutoPublishAlias": "Provisioned",
         "MemorySize": 1024,
         "Timeout": 900,
-        "Handler": "com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingLambda::handleRequest",
+        "Handler": "com.amazonaws.kvstranscribestreaming.lambda.KVSTranscribeStreamingLambda::handleRequest",
         "Runtime": "java11",
         "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
         "Role": {
@@ -762,13 +689,13 @@
               "Ref": "RecordingBucket"
             },
             "TRANSCRIBE_API_GATEWAY_APIID": {
-              "Ref": "WebSocketTranscriptionAPI"
+              "Ref": "TranscriptionWebSocketAPI"
             },
             "TRANSCRIBE_API_GATEWAY_STAGE": {
-              "Ref": "WebSocketAPIStage"
+              "Ref": "TranscriptionWebSocketAPIStage"
             },
             "WEBSOCKET_MAPPING_TABLE_NAME": {
-              "Ref": "WebSocketMappingTable"
+              "Ref": "TranscriptionWebsocketMappingTable"
             }
           }
         },
@@ -791,7 +718,7 @@
         }
       }
     },
-    "WebSocketMappingTable": {
+    "TranscriptionWebsocketMappingTable": {
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
         "AttributeDefinitions": [
@@ -818,10 +745,10 @@
           "ReadCapacityUnits": "5",
           "WriteCapacityUnits": "5"
         },
-        "TableName": "WebSocketMapping"
+        "TableName": "TranscriptionWebsocketMappingTable"
       }
     },
-    "WebSocketIntegrationFunctionRole": {
+    "TranscriptionWebSocketIntegrationFunctionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "ManagedPolicyArns": [
@@ -846,12 +773,12 @@
         }
       }
     },
-    "WebSocketIntegrationFunctionPermission": {
+    "TranscriptionWebSocketIntegrationFunctionPermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
         "Action": "lambda:InvokeFunction",
         "FunctionName": {
-          "Ref": "WebSocketIntegrationFunction"
+          "Ref": "TranscriptionWebSocketIntegrationFunction"
         },
         "Principal": "apigateway.amazonaws.com",
         "SourceArn": {
@@ -868,117 +795,45 @@
               },
               ":",
               {
-                "Ref": "WebSocketTranscriptionAPI"
+                "Ref": "TranscriptionWebSocketAPI"
               },
               "/",
-              "WebSocketAPIStage",
+              "TranscriptionWebSocketAPIStage",
               "/*/*"
             ]
           ]
         }
       }
     },
-    "WebSocketIntegrationFunction": {
-      "Type": "AWS::Lambda::Function",
+    "TranscriptionWebSocketIntegrationFunction": {
+      "Type": "AWS::Serverless::Function",
       "Properties": {
-        "Code": {
-          "ZipFile": { "Fn::Join": ["\n", [
-            "const AWS = require('aws-sdk');",
-            "const dynamodb = new AWS.DynamoDB();",
-            "exports.handler = async (event) => {",
-            "    console.log('Api Gateway event captured ', JSON.stringify(event));",
-            "    const response = {",
-            "        statusCode: 200,",
-            "        body: JSON.stringify('success'),",
-            "    };",
-            "    const { WEB_SOCKET_MAPPING_TABLE } = process.env;",
-            "    const routeKey = event.requestContext.routeKey;",
-            "    if(routeKey === 'transcribe') {",
-            "        const validation = await validateRequest(event);",
-            "        if(validation.statusCode != 200) {",
-            "            return validation;",
-            "        }",
-            "        return await createNewConnection(WEB_SOCKET_MAPPING_TABLE, event);        ",
-            "    }",
-            "    return response;",
-            "};",
-            "const validateRequest = async (event) => {",
-            "    const response = {",
-            "        statusCode: 200,",
-            "        body: JSON.stringify('success'),",
-            "    };",
-            "    let message = 'Validation succeeds';",
-            "    const bodyObject = JSON.parse(event.body);",
-            "    if ((bodyObject.from === undefined || bodyObject.from === null) || (bodyObject.to === undefined || bodyObject.to === null)) {",
-            "        message = 'must specify from and to';",
-            "        response.statusCode = 400;",
-            "    }",
-            "    response.body = JSON.stringify(message);",
-            "    return response;",
-            "};",
-            "const createNewConnection = async (tableName, event) => {",
-            "    const body = JSON.parse(event.body);",
-            "    let statusCode = 200;",
-            "    let responseMsg = 'success';",
-            "    const msgPrefix = 'Websocket connection for call from ' + body.from + ' to ' + body.to;",
-            "    const putItemParams = {",
-            "        Item: {",
-            "            'FromNumber': {",
-            "                S: body.from",
-            "            },",
-            "            'ToNumber': {",
-            "                S: body.to  ",
-            "            },",
-            "            'ConnectionId': {",
-            "                S: event.requestContext.connectionId",
-            "            },",
-            "            'UpdateTime': {",
-            "                S: new Date().toJSON()",
-            "            }",
-            "        },",
-            "        ReturnValues: 'NONE',",
-            "        TableName: tableName",
-            "    };",
-            "    return await dynamodb.putItem(putItemParams).promise()",
-            "    .then(resp => {",
-            "        if(resp !== undefined) {",
-            "            responseMsg = 'has been established.';",
-            "        }   ",
-            "        return {",
-            "            statusCode: statusCode,",
-            "            body: JSON.stringify(msgPrefix + ' ' + responseMsg)",
-            "        };",
-            "    }, err => {",
-            "        responseMsg = 'failed due to putItem exception.';",
-            "        statusCode = 500;",
-            "        console.log(err, err.stack);",
-            "        return {",
-            "            statusCode: statusCode,",
-            "            body: JSON.stringify(msgPrefix + ' ' + responseMsg)",
-            "        };",
-            "    });",
-            "};"
-          ]]}
-        },
+        "AutoPublishAlias": "Provisioned",
+        "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
         "Environment": {
           "Variables": {
             "WEB_SOCKET_MAPPING_TABLE": {
-              "Ref": "WebSocketMappingTable"
-            }
+              "Ref": "TranscriptionWebsocketMappingTable"
+            },
+            "TRANSCRIBE_ROUTE_KEY": "transcribe"
           }
         },
-        "Handler": "index.handler",
+        "Handler": "com.amazonaws.kvstranscribestreaming.lambda.TranscriptionWebSocketIntegrationLambda::handleRequest",
         "Role": {
           "Fn::GetAtt": [
-            "WebSocketIntegrationFunctionRole",
+            "TranscriptionWebSocketIntegrationFunctionRole",
             "Arn"
           ]
         },
-        "Runtime": "nodejs12.x",
-        "Timeout": 3
+        "Runtime": "java11",
+        "MemorySize": 256,
+        "Timeout": 10,
+        "ProvisionedConcurrencyConfig" : {
+          "ProvisionedConcurrentExecutions" : 2
+        }
       }
     },
-    "WebSocketIntegrationRole": {
+    "TranscriptionWebSocketIntegrationRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "ManagedPolicyArns": [
@@ -1002,11 +857,11 @@
         }
       }
     },
-    "WebSocketTranscriptionAPI": {
+    "TranscriptionWebSocketAPI": {
       "Type": "AWS::ApiGatewayV2::Api",
       "Properties": {
         "CredentialsArn": {
-          "Fn::GetAtt": ["WebSocketIntegrationRole", "Arn"]
+          "Fn::GetAtt": ["TranscriptionWebSocketIntegrationRole", "Arn"]
         },
         "Name": "TranscriptWebSocketTransmission",
         "ProtocolType": "WEBSOCKET",
@@ -1014,11 +869,11 @@
         "ApiKeySelectionExpression": "$request.header.x-api-key"
       }
     },
-    "WebSocketTranscriptionLambdaIntegration": {
+    "TranscriptionWebSocketLambdaIntegration": {
       "Type": "AWS::ApiGatewayV2::Integration",
       "Properties": {
         "ApiId": {
-          "Ref": "WebSocketTranscriptionAPI"
+          "Ref": "TranscriptionWebSocketAPI"
         },
         "IntegrationType": "AWS_PROXY",
         "IntegrationUri": {
@@ -1035,27 +890,27 @@
               },
               ":lambda:path/2015-03-31/functions/",
               {
-                "Fn::GetAtt": ["WebSocketIntegrationFunction", "Arn"]
+                "Fn::GetAtt": ["TranscriptionWebSocketIntegrationFunction", "Arn"]
               },
               "/invocations"
             ]
           ]
         },
         "CredentialsArn": {
-          "Fn::GetAtt": ["WebSocketIntegrationRole", "Arn"]
+          "Fn::GetAtt": ["TranscriptionWebSocketIntegrationRole", "Arn"]
         },
         "IntegrationMethod": "POST",
         "ConnectionType": "INTERNET"
       }
     },
-    "WebSocketAPITranscribeRoute": {
+    "TranscriptionWebSocketAPITranscribeRoute": {
       "Type": "AWS::ApiGatewayV2::Route",
       "DependsOn": [
-        "WebSocketTranscriptionLambdaIntegration"
+        "TranscriptionWebSocketLambdaIntegration"
       ],
       "Properties": {
         "ApiId": {
-          "Ref": "WebSocketTranscriptionAPI"
+          "Ref": "TranscriptionWebSocketAPI"
         },
         "RouteKey": "transcribe",
         "AuthorizationType": "NONE",
@@ -1065,33 +920,33 @@
             [
               "integrations",
               {
-                "Ref": "WebSocketTranscriptionLambdaIntegration"
+                "Ref": "TranscriptionWebSocketLambdaIntegration"
               }
             ]
           ]
         }
       }
     },
-    "WebSocketAPITranscribeRouteResponse": {
+    "TranscriptionWebSocketAPIRouteResponse": {
       "Type": "AWS::ApiGatewayV2::RouteResponse",
       "Properties": {
         "RouteId": {
-          "Ref": "WebSocketAPITranscribeRoute"
+          "Ref": "TranscriptionWebSocketAPITranscribeRoute"
         },
         "ApiId": {
-          "Ref": "WebSocketTranscriptionAPI"
+          "Ref": "TranscriptionWebSocketAPI"
         },
         "RouteResponseKey": "$default"
       }
     },
-    "WebSocketAPIConnectRoute": {
+    "TranscriptionWebSocketAPIConnectRoute": {
       "Type": "AWS::ApiGatewayV2::Route",
       "DependsOn": [
-        "WebSocketTranscriptionLambdaIntegration"
+        "TranscriptionWebSocketLambdaIntegration"
       ],
       "Properties": {
         "ApiId": {
-          "Ref": "WebSocketTranscriptionAPI"
+          "Ref": "TranscriptionWebSocketAPI"
         },
         "RouteKey": "$connect",
         "AuthorizationType": "NONE",
@@ -1101,21 +956,21 @@
             [
               "integrations",
               {
-                "Ref": "WebSocketTranscriptionLambdaIntegration"
+                "Ref": "TranscriptionWebSocketLambdaIntegration"
               }
             ]
           ]
         }
       }
     },
-    "WebSocketAPIDisconnectRoute": {
+    "TranscriptionWebSocketAPIDisconnectRoute": {
       "Type": "AWS::ApiGatewayV2::Route",
       "DependsOn": [
-        "WebSocketTranscriptionLambdaIntegration"
+        "TranscriptionWebSocketLambdaIntegration"
       ],
       "Properties": {
         "ApiId": {
-          "Ref": "WebSocketTranscriptionAPI"
+          "Ref": "TranscriptionWebSocketAPI"
         },
         "RouteKey": "$disconnect",
         "AuthorizationType": "NONE",
@@ -1125,37 +980,61 @@
             [
               "integrations",
               {
-                "Ref": "WebSocketTranscriptionLambdaIntegration"
+                "Ref": "TranscriptionWebSocketLambdaIntegration"
               }
             ]
           ]
         }
       }
     },
-    "WebSocketAPIDeployment": {
-      "Type": "AWS::ApiGatewayV2::Deployment",
-      "DependsOn": ["WebSocketAPIDisconnectRoute", "WebSocketAPIConnectRoute", "WebSocketAPITranscribeRoute"],
+    "TranscriptionWebSocketAPIDefaultRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "DependsOn": [
+        "TranscriptionWebSocketLambdaIntegration"
+      ],
       "Properties": {
         "ApiId": {
-          "Ref": "WebSocketTranscriptionAPI"
+          "Ref": "TranscriptionWebSocketAPI"
+        },
+        "RouteKey": "$default",
+        "AuthorizationType": "NONE",
+        "Target": {
+          "Fn::Join": [
+            "/",
+            [
+              "integrations",
+              {
+                "Ref": "TranscriptionWebSocketLambdaIntegration"
+              }
+            ]
+          ]
         }
       }
     },
-    "WebSocketAPIStage": {
+    "TranscriptionWebSocketAPIDeployment": {
+      "Type": "AWS::ApiGatewayV2::Deployment",
+      "DependsOn": ["TranscriptionWebSocketAPIDisconnectRoute", "TranscriptionWebSocketAPIConnectRoute", "TranscriptionWebSocketAPITranscribeRoute", "TranscriptionWebSocketAPIDefaultRoute"],
+      "Properties": {
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        }
+      }
+    },
+    "TranscriptionWebSocketAPIStage": {
       "Type": "AWS::ApiGatewayV2::Stage",
       "Properties": {
         "StageName": "Beta",
         "DeploymentId": {
-          "Ref": "WebSocketAPIDeployment"
+          "Ref": "TranscriptionWebSocketAPIDeployment"
         },
         "ApiId": {
-          "Ref": "WebSocketTranscriptionAPI"
+          "Ref": "TranscriptionWebSocketAPI"
         }
       }
     }
   },
   "Outputs": {
-    "WebSocketAPIURL": {
+    "TranscriptionWebSocketAPIURL": {
       "Description": "The url to receive transcription. ",
       "Value": {
         "Fn::Join": [
@@ -1163,7 +1042,7 @@
           [
             "wss://",
             {
-              "Ref": "WebSocketTranscriptionAPI"
+              "Ref": "TranscriptionWebSocketAPI"
             },
             ".execute-api.",
             {
@@ -1171,16 +1050,16 @@
             },
             ".amazonaws.com/",
             {
-              "Ref": "WebSocketAPIStage"
+              "Ref": "TranscriptionWebSocketAPIStage"
             }
           ]
         ]
       },
       "Export": {
-        "Name": "WebSocketAPIURL"
+        "Name": "TranscriptionWebSocketAPIURL"
       }
     },
-    "WebSocketConnectionURL": {
+    "TranscriptionWebSocketConnectionURL": {
       "Description": "The url to POST transcription to api gateway.",
       "Value": {
         "Fn::Join": [
@@ -1188,7 +1067,7 @@
           [
             "https://",
             {
-              "Ref": "WebSocketTranscriptionAPI"
+              "Ref": "TranscriptionWebSocketAPI"
             },
             ".execute-api.",
             {
@@ -1196,14 +1075,14 @@
             },
             ".amazonaws.com/",
             {
-              "Ref": "WebSocketAPIStage"
+              "Ref": "TranscriptionWebSocketAPIStage"
             },
             "/@connections"
           ]
         ]
       },
       "Export": {
-        "Name": "WebSocketConnectionURL"
+        "Name": "TranscriptionWebSocketConnectionURL"
       }
     }
   }

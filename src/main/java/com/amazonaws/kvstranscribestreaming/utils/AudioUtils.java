@@ -1,4 +1,4 @@
-package com.amazonaws.utils;
+package com.amazonaws.kvstranscribestreaming.utils;
 
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;

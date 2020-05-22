@@ -1,27 +1,29 @@
-package com.amazonaws.kvstranscribestreaming;
+package com.amazonaws.kvstranscribestreaming.handler;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.constants.Platform;
+import com.amazonaws.kvstranscribestreaming.constants.Platform;
 import com.amazonaws.kinesisvideo.parser.ebml.InputStreamParserByteSource;
 import com.amazonaws.kinesisvideo.parser.mkv.StreamingMkvReader;
 import com.amazonaws.kinesisvideo.parser.utilities.FragmentMetadataVisitor;
+import com.amazonaws.kvstranscribestreaming.streaming.KVSTransactionIdTagProcessor;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.streamingeventmodel.StreamingStatus;
 import com.amazonaws.streamingeventmodel.StreamingStatusStartedDetail;
-import com.amazonaws.transcribepublishing.DynamoDBTranscriptionPublisher;
-import com.amazonaws.transcribepublishing.TranscriptionPublisher;
-import com.amazonaws.transcribepublishing.WebSocketTranscriptionPublisher;
-import com.amazonaws.transcribestreaming.KVSByteToAudioEventSubscription;
-import com.amazonaws.transcribestreaming.StreamTranscriptionBehaviorImpl;
-import com.amazonaws.transcribestreaming.TranscribeStreamingRetryClient;
+import com.amazonaws.kvstranscribestreaming.publisher.DynamoDBTranscriptionPublisher;
+import com.amazonaws.kvstranscribestreaming.publisher.TranscriptionPublisher;
+import com.amazonaws.kvstranscribestreaming.publisher.WebSocketTranscriptionPublisher;
+import com.amazonaws.kvstranscribestreaming.transcribe.KVSByteToAudioEventSubscription;
+import com.amazonaws.kvstranscribestreaming.transcribe.StreamTranscriptionBehaviorImpl;
+import com.amazonaws.kvstranscribestreaming.transcribe.TranscribeStreamingRetryClient;
+import com.amazonaws.kvstranscribestreaming.streaming.StreaingEventDetailValidator;
 
-import com.amazonaws.utils.AudioUtils;
-import com.amazonaws.utils.KVSUtils;
-import com.amazonaws.utils.MetricsUtil;
+import com.amazonaws.kvstranscribestreaming.utils.AudioUtils;
+import com.amazonaws.kvstranscribestreaming.utils.KVSUtils;
+import com.amazonaws.kvstranscribestreaming.utils.MetricsUtil;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.reactivestreams.Publisher;
@@ -84,8 +86,7 @@ public class KVSTranscribeStreamingHandler {
 
     private static final int CHUNK_SIZE_IN_KB = 4;
     private static final Regions REGION = Regions.fromName(System.getenv("AWS_REGION"));
-    private static final Regions TRANSCRIBE_REGION = Regions.fromName(System.getenv("AWS_REGION"));
-    private static final String TRANSCRIBE_ENDPOINT = "https://transcribestreaming." + TRANSCRIBE_REGION.getName()
+    private static final String TRANSCRIBE_ENDPOINT = "https://transcribestreaming." + REGION.getName()
             + ".amazonaws.com";
     private static final String RECORDINGS_BUCKET_NAME = System.getenv("RECORDINGS_BUCKET_NAME");
     private static final String IS_TRANSCRIBE_ENABLED = System.getenv("IS_TRANSCRIBE_ENABLED");
@@ -126,7 +127,9 @@ public class KVSTranscribeStreamingHandler {
             if (StreamingStatus.STARTED.name().equals(streamingStatus)) {
                 final StreamingStatusStartedDetail streamingStatusStartedDetail = objectMapper.convertValue(eventDetail,
                         StreamingStatusStartedDetail.class);
-                logger.info("[{}] Streaming status {} , EventDetail: {}", transactionId, streamingStatus, streamingStatusStartedDetail);
+
+                StreaingEventDetailValidator.validateStreamingStartedEvent(streamingStatusStartedDetail);
+                logger.info("[{}] Streaming STARTED event is valid, Streaming status {} , EventDetail: {}", transactionId, streamingStatus, streamingStatusStartedDetail);
                 startKVSToTranscribeStreaming(streamingStatusStartedDetail);
             }
 
@@ -169,7 +172,7 @@ public class KVSTranscribeStreamingHandler {
 
         if (Boolean.parseBoolean(IS_TRANSCRIBE_ENABLED)) {
             try (TranscribeStreamingRetryClient client = new TranscribeStreamingRetryClient(getTranscribeCredentials(),
-                    TRANSCRIBE_ENDPOINT, TRANSCRIBE_REGION, metricsUtil)) {
+                    TRANSCRIBE_ENDPOINT, REGION, metricsUtil)) {
 
                 logger.info("Calling Transcribe service..");
 

@@ -1,4 +1,4 @@
-package com.amazonaws.constants;
+package com.amazonaws.kvstranscribestreaming.constants;
 
 public class WebSockerMappingDDBConstants {
     public static final String FROM_NUMBER = "FromNumber";

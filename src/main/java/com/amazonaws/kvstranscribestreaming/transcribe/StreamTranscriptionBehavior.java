@@ -1,4 +1,4 @@
-package com.amazonaws.transcribestreaming;
+package com.amazonaws.kvstranscribestreaming.transcribe;
 
 import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionResponse;
 import software.amazon.awssdk.services.transcribestreaming.model.TranscriptResultStream;

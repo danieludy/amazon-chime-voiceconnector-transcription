@@ -1,4 +1,4 @@
-package com.amazonaws.utils;
+package com.amazonaws.kvstranscribestreaming.utils;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.client.builder.AwsClientBuilder;
@@ -10,7 +10,7 @@ import com.amazonaws.kinesisvideo.parser.mkv.MkvElementVisitException;
 import com.amazonaws.kinesisvideo.parser.mkv.MkvValue;
 import com.amazonaws.kinesisvideo.parser.mkv.StreamingMkvReader;
 import com.amazonaws.kinesisvideo.parser.utilities.FragmentMetadataVisitor;
-import com.amazonaws.kvstranscribestreaming.KVSTransactionIdTagProcessor;
+import com.amazonaws.kvstranscribestreaming.streaming.KVSTransactionIdTagProcessor;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.kinesisvideo.AmazonKinesisVideo;
 import com.amazonaws.services.kinesisvideo.AmazonKinesisVideoClientBuilder;

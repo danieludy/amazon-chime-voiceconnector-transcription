@@ -1,6 +1,7 @@
-package com.amazonaws.kvstranscribestreaming;
+package com.amazonaws.kvstranscribestreaming.lambda;
 
-import com.amazonaws.constants.Platform;
+import com.amazonaws.kvstranscribestreaming.handler.KVSTranscribeStreamingHandler;
+import com.amazonaws.kvstranscribestreaming.constants.Platform;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.SQSEvent;

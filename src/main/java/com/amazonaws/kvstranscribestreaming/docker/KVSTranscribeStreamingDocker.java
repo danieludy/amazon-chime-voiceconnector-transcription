@@ -1,6 +1,7 @@
-package com.amazonaws.kvstranscribestreaming;
+package com.amazonaws.kvstranscribestreaming.docker;
 
-import com.amazonaws.constants.Platform;
+import com.amazonaws.kvstranscribestreaming.constants.Platform;
+import com.amazonaws.kvstranscribestreaming.handler.KVSTranscribeStreamingHandler;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.cli.CommandLine;

@@ -1,4 +1,4 @@
-package com.amazonaws.transcribepublishing;
+package com.amazonaws.kvstranscribestreaming.publisher;
 
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
@@ -15,7 +15,7 @@ import java.text.NumberFormat;
 import java.time.Instant;
 import java.util.List;
 
-import static com.amazonaws.constants.TranscribeDDBConstants.*;
+import static com.amazonaws.kvstranscribestreaming.constants.TranscribeDDBConstants.*;
 
 /**
  * TranscribedSegmentWriter writes the transcript segments to DynamoDB
@@ -55,25 +55,6 @@ public class DynamoDBTranscriptionPublisher implements TranscriptionPublisher {
         // initialize it to null so it's set on the first write
         // TODO:  this is a race condition nightmare so use the leg attribute once it's available
         this.speakerLabel = null;
-    }
-
-    private String getTransactionId() {
-        return this.transactionId;
-    }
-
-    private String getSpeakerLabel() {
-        // If isCaller is not avaiable, fall back to initial speaker label by querying DynamoDB.
-        if (this.isCaller == null && this.speakerLabel == null) {
-            this.speakerLabel = initSpeakerLabel();
-        } else if (this.isCaller != null) {
-            this.speakerLabel = this.isCaller == Boolean.TRUE ? "spk_0" : "spk_1";
-        }
-
-        return this.speakerLabel;
-    }
-
-    private DynamoDB getDdbClient() {
-        return this.ddbClient;
     }
 
     @Override
@@ -123,6 +104,10 @@ public class DynamoDBTranscriptionPublisher implements TranscriptionPublisher {
                 logger.error("Exception while writing to DDB:", e);
             }
         }
+    }
+
+    private DynamoDB getDdbClient() {
+        return this.ddbClient;
     }
 
     private String initSpeakerLabel() {
@@ -179,5 +164,20 @@ public class DynamoDBTranscriptionPublisher implements TranscriptionPublisher {
         }
 
         return ddbItem;
+    }
+
+    private String getTransactionId() {
+        return this.transactionId;
+    }
+
+    private String getSpeakerLabel() {
+        // If isCaller is not avaiable, fall back to initial speaker label by querying DynamoDB.
+        if (this.isCaller == null && this.speakerLabel == null) {
+            this.speakerLabel = initSpeakerLabel();
+        } else if (this.isCaller != null) {
+            this.speakerLabel = this.isCaller == Boolean.TRUE ? "spk_0" : "spk_1";
+        }
+
+        return this.speakerLabel;
     }
 }

@@ -1,6 +1,6 @@
-package com.amazonaws.transcribestreaming;
+package com.amazonaws.kvstranscribestreaming.transcribe;
 
-import com.amazonaws.transcribepublishing.TranscriptionPublisher;
+import com.amazonaws.kvstranscribestreaming.publisher.TranscriptionPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionResponse;
