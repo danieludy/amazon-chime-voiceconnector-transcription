@@ -197,7 +197,7 @@
       "Properties": {
         "ContainerDefinitions": [
           {
-            "EntryPoint": ["java","-cp",".:/tmp/chime-streaming-transcribe/lib/*","com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingDocker"],
+            "EntryPoint": ["java","-cp",".:/tmp/chime-streaming-transcribe/lib/*","com.amazonaws.kvstranscribestreaming.docker.KVSTranscribeStreamingDocker"],
             "Image": {
               "Ref": "DockerImage"
             },
@@ -248,7 +248,8 @@
         "ManagedPolicyArns": [
           "arn:aws:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess",
           "arn:aws:iam::aws:policy/AmazonTranscribeFullAccess",
-          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
         ],
         "Policies": [
           {
@@ -282,18 +283,6 @@
                       },
                       "/*"
                     ]
-                    ]
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "dynamodb:*"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "TranscriptionTable",
-                      "Arn"
                     ]
                   }
                 },
@@ -342,62 +331,10 @@
     },
     "SendRunTaskRequestLambdaFunction": {
       "Condition": "CreateECS",
-      "Type": "AWS::Lambda::Function",
+      "Type": "AWS::Serverless::Function",
       "Properties": {
-        "Code": {
-          "ZipFile": { "Fn::Join": ["\n", [
-                  "const AWS = require('aws-sdk');",
-                  "exports.handler = async (event, context) => {",
-                  "  const { RUNNER, IS_TRANSCRIBE_ENABLED, RECORDINGS_BUCKET_NAME, REGION, CLUSTER_NAME, CONTAINER_NAME } = process.env;",
-                  "  const resp = {",
-                  "    'statusCode': '200',",
-                  "    'body': JSON.stringify('success')",
-                  "  };",
-                  "  if(event.Records.length !== 1) {",
-                  "    resp.body = JSON.stringify('Invalid number of records present in the SQS message body');",
-                  "    return resp;",
-                  "  }",
-                  "  const detail = JSON.parse(event.Records[0].body).detail;",
-                  "  console.log(JSON.stringify(detail));",
-                  "  if(detail.streamingStatus === 'STARTED') {",
-                  "    const runParams = {",
-                  "      taskDefinition: RUNNER,",
-                  "      launchType: 'EC2',",
-                  "      cluster: CLUSTER_NAME,",
-                  "      overrides: {",
-                  "        containerOverrides: [",
-                  "          {",
-                  "            command: [",
-                  "              '-e',",
-                  "              event.Records[0].body",
-                  "            ],",
-                  "            environment: [",
-                  "              {",
-                  "                name: 'IS_TRANSCRIBE_ENABLED',",
-                  "                value: IS_TRANSCRIBE_ENABLED",
-                  "              },",
-                  "              {",
-                  "                name: 'RECORDINGS_BUCKET_NAME',",
-                  "                value: RECORDINGS_BUCKET_NAME",
-                  "              },",
-                  "              {",
-                  "                name: 'AWS_REGION',",
-                  "                value: REGION",
-                  "              }",
-                  "            ],",
-                  "            name: CONTAINER_NAME",
-                  "          },",
-                  "        ],",
-                  "      },",
-                  "    };",
-                  "    console.log('run parameter ',JSON.stringify(runParams));",
-                  "    const result = await new AWS.ECS().runTask(runParams).promise();",
-                  "    resp.body = JSON.stringify(result);",
-                  "  }",
-                  "  return resp;",
-                  "};"
-              ]]}
-        },
+        "AutoPublishAlias": "Provisioned",
+        "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
         "Environment": {
           "Variables": {
             "CLUSTER_NAME": {
@@ -407,38 +344,48 @@
             "RECORDINGS_BUCKET_NAME": {
               "Ref": "RecordingBucket"
             },
-            "REGION": {
-              "Ref": "AWS::Region"
-            },
-            "RUNNER": {
+            "TASK_DEFINITION": {
               "Ref": "TranscribeTaskDefinition"
             },
-            "CONTAINER_NAME": "transcribe-container"
+            "CONTAINER_NAME": "transcribe-container",
+            "TRANSCRIBE_API_GATEWAY_APIID": {
+              "Ref": "TranscriptionWebSocketAPI"
+            },
+            "TRANSCRIBE_API_GATEWAY_STAGE": {
+              "Ref": "TranscriptionWebSocketAPIStage"
+            },
+            "WEBSOCKET_MAPPING_TABLE_NAME": {
+              "Ref": "TranscriptionWebsocketMappingTable"
+            }
           }
         },
-        "Handler": "index.handler",
+        "Handler": "com.amazonaws.kvstranscribestreaming.lambda.SendRunTaskRequestLambda::handleRequest",
         "Role": {
           "Fn::GetAtt": [
             "SendRunTaskRequestExecutionRole",
             "Arn"
           ]
         },
-        "Runtime": "nodejs12.x",
-        "Timeout": 3
-      }
-    },
-    "SendRunTaskRequestLambdaEventMapping": {
-      "Condition": "CreateECS",
-      "Type": "AWS::Lambda::EventSourceMapping",
-      "Properties": {
-          "Enabled": true,
-          "EventSourceArn": {
-            "Fn::GetAtt": [
-              "EventSQS",
-              "Arn"
-            ]
-          },
-          "FunctionName": { "Ref": "SendRunTaskRequestLambdaFunction" }
+        "Events": {
+          "EventQueue": {
+            "Type": "SQS",
+            "Properties": {
+              "Queue": {
+                "Fn::GetAtt": [
+                  "EventSQS",
+                  "Arn"
+                ]
+              },
+              "BatchSize": 1
+            }
+          }
+        },
+        "Runtime": "java11",
+        "MemorySize": 512,
+        "Timeout": 10,
+        "ProvisionedConcurrencyConfig" : {
+          "ProvisionedConcurrentExecutions" : 2
+        }
       }
     },
     "Vpc": {
@@ -643,7 +590,6 @@
         ]
       }
     },
-
     "LambdaRole": {
       "Condition": "CreateLambda",
       "Type": "AWS::IAM::Role",
@@ -651,7 +597,8 @@
         "ManagedPolicyArns": [
           "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole",
           "arn:aws:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess",
-          "arn:aws:iam::aws:policy/AmazonTranscribeFullAccess"
+          "arn:aws:iam::aws:policy/AmazonTranscribeFullAccess",
+          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
         ],
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -707,18 +654,6 @@
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "dynamodb:*"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "TranscriptionTable",
-                      "Arn"
-                    ]
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
                     "cloudwatch:Put*",
                     "cloudwatch:Get*",
                     "cloudwatch:List*"
@@ -738,7 +673,7 @@
         "AutoPublishAlias": "Provisioned",
         "MemorySize": 1024,
         "Timeout": 900,
-        "Handler": "com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingLambda::handleRequest",
+        "Handler": "com.amazonaws.kvstranscribestreaming.lambda.KVSTranscribeStreamingLambda::handleRequest",
         "Runtime": "java11",
         "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
         "Role": {
@@ -752,6 +687,15 @@
             "IS_TRANSCRIBE_ENABLED": "true",
             "RECORDINGS_BUCKET_NAME": {
               "Ref": "RecordingBucket"
+            },
+            "TRANSCRIBE_API_GATEWAY_APIID": {
+              "Ref": "TranscriptionWebSocketAPI"
+            },
+            "TRANSCRIBE_API_GATEWAY_STAGE": {
+              "Ref": "TranscriptionWebSocketAPIStage"
+            },
+            "WEBSOCKET_MAPPING_TABLE_NAME": {
+              "Ref": "TranscriptionWebsocketMappingTable"
             }
           }
         },
@@ -772,6 +716,373 @@
         "ProvisionedConcurrencyConfig" : {
           "ProvisionedConcurrentExecutions" : 2
         }
+      }
+    },
+    "TranscriptionWebsocketMappingTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "FromNumber",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "ToNumber",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "FromNumber",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "ToNumber",
+            "KeyType": "RANGE"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": "5",
+          "WriteCapacityUnits": "5"
+        },
+        "TableName": "TranscriptionWebsocketMappingTable"
+      }
+    },
+    "TranscriptionWebSocketIntegrationFunctionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "TranscriptionWebSocketIntegrationFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "TranscriptionWebSocketIntegrationFunction"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:aws:execute-api:",
+              {
+                "Ref": "AWS::Region"
+              },
+              ":",
+              {
+                "Ref": "AWS::AccountId"
+              },
+              ":",
+              {
+                "Ref": "TranscriptionWebSocketAPI"
+              },
+              "/",
+              "TranscriptionWebSocketAPIStage",
+              "/*/*"
+            ]
+          ]
+        }
+      }
+    },
+    "TranscriptionWebSocketIntegrationFunction": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "AutoPublishAlias": "Provisioned",
+        "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
+        "Environment": {
+          "Variables": {
+            "WEB_SOCKET_MAPPING_TABLE": {
+              "Ref": "TranscriptionWebsocketMappingTable"
+            },
+            "TRANSCRIBE_ROUTE_KEY": "transcribe"
+          }
+        },
+        "Handler": "com.amazonaws.kvstranscribestreaming.lambda.TranscriptionWebSocketIntegrationLambda::handleRequest",
+        "Role": {
+          "Fn::GetAtt": [
+            "TranscriptionWebSocketIntegrationFunctionRole",
+            "Arn"
+          ]
+        },
+        "Runtime": "java11",
+        "MemorySize": 512,
+        "Timeout": 10,
+        "ProvisionedConcurrencyConfig" : {
+          "ProvisionedConcurrentExecutions" : 2
+        }
+      }
+    },
+    "TranscriptionWebSocketIntegrationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
+        ],
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Principal": {
+                "Service": [
+                  "apigateway.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "TranscriptionWebSocketAPI": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "CredentialsArn": {
+          "Fn::GetAtt": ["TranscriptionWebSocketIntegrationRole", "Arn"]
+        },
+        "Name": "TranscriptWebSocketTransmission",
+        "ProtocolType": "WEBSOCKET",
+        "RouteSelectionExpression": "${request.body.service}",
+        "ApiKeySelectionExpression": "$request.header.x-api-key"
+      }
+    },
+    "TranscriptionWebSocketLambdaIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition"
+              },
+              ":apigateway:",
+              {
+                "Ref": "AWS::Region"
+              },
+              ":lambda:path/2015-03-31/functions/",
+              {
+                "Fn::GetAtt": ["TranscriptionWebSocketIntegrationFunction", "Arn"]
+              },
+              "/invocations"
+            ]
+          ]
+        },
+        "CredentialsArn": {
+          "Fn::GetAtt": ["TranscriptionWebSocketIntegrationRole", "Arn"]
+        },
+        "IntegrationMethod": "POST",
+        "ConnectionType": "INTERNET"
+      }
+    },
+    "TranscriptionWebSocketAPITranscribeRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "DependsOn": [
+        "TranscriptionWebSocketLambdaIntegration"
+      ],
+      "Properties": {
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        },
+        "RouteKey": "transcribe",
+        "AuthorizationType": "NONE",
+        "Target": {
+          "Fn::Join": [
+            "/",
+            [
+              "integrations",
+              {
+                "Ref": "TranscriptionWebSocketLambdaIntegration"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "TranscriptionWebSocketAPIRouteResponse": {
+      "Type": "AWS::ApiGatewayV2::RouteResponse",
+      "Properties": {
+        "RouteId": {
+          "Ref": "TranscriptionWebSocketAPITranscribeRoute"
+        },
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        },
+        "RouteResponseKey": "$default"
+      }
+    },
+    "TranscriptionWebSocketAPIConnectRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "DependsOn": [
+        "TranscriptionWebSocketLambdaIntegration"
+      ],
+      "Properties": {
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        },
+        "RouteKey": "$connect",
+        "AuthorizationType": "NONE",
+        "Target": {
+          "Fn::Join": [
+            "/",
+            [
+              "integrations",
+              {
+                "Ref": "TranscriptionWebSocketLambdaIntegration"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "TranscriptionWebSocketAPIDisconnectRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "DependsOn": [
+        "TranscriptionWebSocketLambdaIntegration"
+      ],
+      "Properties": {
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        },
+        "RouteKey": "$disconnect",
+        "AuthorizationType": "NONE",
+        "Target": {
+          "Fn::Join": [
+            "/",
+            [
+              "integrations",
+              {
+                "Ref": "TranscriptionWebSocketLambdaIntegration"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "TranscriptionWebSocketAPIDefaultRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "DependsOn": [
+        "TranscriptionWebSocketLambdaIntegration"
+      ],
+      "Properties": {
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        },
+        "RouteKey": "$default",
+        "AuthorizationType": "NONE",
+        "Target": {
+          "Fn::Join": [
+            "/",
+            [
+              "integrations",
+              {
+                "Ref": "TranscriptionWebSocketLambdaIntegration"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "TranscriptionWebSocketAPIDeployment": {
+      "Type": "AWS::ApiGatewayV2::Deployment",
+      "DependsOn": ["TranscriptionWebSocketAPIDisconnectRoute", "TranscriptionWebSocketAPIConnectRoute", "TranscriptionWebSocketAPITranscribeRoute", "TranscriptionWebSocketAPIDefaultRoute"],
+      "Properties": {
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        }
+      }
+    },
+    "TranscriptionWebSocketAPIStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "StageName": "Beta",
+        "DeploymentId": {
+          "Ref": "TranscriptionWebSocketAPIDeployment"
+        },
+        "ApiId": {
+          "Ref": "TranscriptionWebSocketAPI"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TranscriptionWebSocketAPIURL": {
+      "Description": "The url to receive transcription. ",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "wss://",
+            {
+              "Ref": "TranscriptionWebSocketAPI"
+            },
+            ".execute-api.",
+            {
+              "Ref": "AWS::Region"
+            },
+            ".amazonaws.com/",
+            {
+              "Ref": "TranscriptionWebSocketAPIStage"
+            }
+          ]
+        ]
+      },
+      "Export": {
+        "Name": "TranscriptionWebSocketAPIURL"
+      }
+    },
+    "TranscriptionWebSocketConnectionURL": {
+      "Description": "The url to POST transcription to api gateway.",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Ref": "TranscriptionWebSocketAPI"
+            },
+            ".execute-api.",
+            {
+              "Ref": "AWS::Region"
+            },
+            ".amazonaws.com/",
+            {
+              "Ref": "TranscriptionWebSocketAPIStage"
+            },
+            "/@connections"
+          ]
+        ]
+      },
+      "Export": {
+        "Name": "TranscriptionWebSocketConnectionURL"
       }
     }
   }

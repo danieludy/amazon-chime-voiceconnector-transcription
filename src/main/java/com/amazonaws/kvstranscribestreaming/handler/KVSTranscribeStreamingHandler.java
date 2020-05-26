@@ -1,20 +1,28 @@
-package com.amazonaws.kvstranscribestreaming;
+package com.amazonaws.kvstranscribestreaming.handler;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.kvstranscribestreaming.constants.Platform;
 import com.amazonaws.kinesisvideo.parser.ebml.InputStreamParserByteSource;
 import com.amazonaws.kinesisvideo.parser.mkv.StreamingMkvReader;
 import com.amazonaws.kinesisvideo.parser.utilities.FragmentMetadataVisitor;
+import com.amazonaws.kvstranscribestreaming.streaming.KVSTransactionIdTagProcessor;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.streamingeventmodel.StreamingStatus;
 import com.amazonaws.streamingeventmodel.StreamingStatusStartedDetail;
-import com.amazonaws.transcribestreaming.KVSByteToAudioEventSubscription;
-import com.amazonaws.transcribestreaming.StreamTranscriptionBehaviorImpl;
-import com.amazonaws.transcribestreaming.TranscribeStreamingRetryClient;
+import com.amazonaws.kvstranscribestreaming.publisher.DynamoDBTranscriptionPublisher;
+import com.amazonaws.kvstranscribestreaming.publisher.TranscriptionPublisher;
+import com.amazonaws.kvstranscribestreaming.publisher.WebSocketTranscriptionPublisher;
+import com.amazonaws.kvstranscribestreaming.transcribe.KVSByteToAudioEventSubscription;
+import com.amazonaws.kvstranscribestreaming.transcribe.StreamTranscriptionBehaviorImpl;
+import com.amazonaws.kvstranscribestreaming.transcribe.TranscribeStreamingRetryClient;
 
+import com.amazonaws.kvstranscribestreaming.utils.AudioUtils;
+import com.amazonaws.kvstranscribestreaming.utils.KVSUtils;
+import com.amazonaws.kvstranscribestreaming.utils.MetricsUtil;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.reactivestreams.Publisher;
@@ -38,7 +46,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -48,35 +58,15 @@ import java.util.concurrent.TimeoutException;
 /**
  * Demonstrate Amazon VoiceConnectors's real-time transcription feature using
  * AWS Kinesis Video Streams and AWS Transcribe. The data flow is :
- * <p>
+ *
  * Amazon CloudWatch Events => Amazon SQS => AWS Lambda => AWS Transcribe => AWS
  * DynamoDB & S3
- *
- * <p>
- * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * </p>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so.
- * <p>
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 public class KVSTranscribeStreamingHandler {
 
     private static final int CHUNK_SIZE_IN_KB = 4;
     private static final Regions REGION = Regions.fromName(System.getenv("AWS_REGION"));
-    private static final Regions TRANSCRIBE_REGION = Regions.fromName(System.getenv("AWS_REGION"));
-    private static final String TRANSCRIBE_ENDPOINT = "https://transcribestreaming." + TRANSCRIBE_REGION.getName()
+    private static final String TRANSCRIBE_ENDPOINT = "https://transcribestreaming." + REGION.getName()
             + ".amazonaws.com";
     private static final String RECORDINGS_BUCKET_NAME = System.getenv("RECORDINGS_BUCKET_NAME");
     private static final String IS_TRANSCRIBE_ENABLED = System.getenv("IS_TRANSCRIBE_ENABLED");
@@ -90,9 +80,6 @@ public class KVSTranscribeStreamingHandler {
     private static final Logger logger = LoggerFactory.getLogger(KVSTranscribeStreamingHandler.class);
     public static final MetricsUtil metricsUtil = new MetricsUtil(AmazonCloudWatchClientBuilder.defaultClient());
     private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-
-    // SegmentWriter saves Transcription segments to DynamoDB
-    private TranscribedSegmentWriter segmentWriter = null;
 
     private final Platform platform;
     private final Boolean shouldWriteAudioToFile = Boolean.TRUE;
@@ -120,6 +107,7 @@ public class KVSTranscribeStreamingHandler {
             if (StreamingStatus.STARTED.name().equals(streamingStatus)) {
                 final StreamingStatusStartedDetail streamingStatusStartedDetail = objectMapper.convertValue(eventDetail,
                         StreamingStatusStartedDetail.class);
+
                 logger.info("[{}] Streaming status {} , EventDetail: {}", transactionId, streamingStatus, streamingStatusStartedDetail);
                 startKVSToTranscribeStreaming(streamingStatusStartedDetail);
             }
@@ -161,19 +149,21 @@ public class KVSTranscribeStreamingHandler {
         KVSTransactionIdTagProcessor tagProcessor = new KVSTransactionIdTagProcessor(transactionId);
         FragmentMetadataVisitor fragmentVisitor = FragmentMetadataVisitor.create(Optional.of(tagProcessor));
 
-        if (Boolean.valueOf(IS_TRANSCRIBE_ENABLED)) {
+        if (Boolean.parseBoolean(IS_TRANSCRIBE_ENABLED)) {
             try (TranscribeStreamingRetryClient client = new TranscribeStreamingRetryClient(getTranscribeCredentials(),
-                    TRANSCRIBE_ENDPOINT, TRANSCRIBE_REGION, metricsUtil)) {
+                    TRANSCRIBE_ENDPOINT, REGION, metricsUtil)) {
 
                 logger.info("Calling Transcribe service..");
 
-                segmentWriter = new TranscribedSegmentWriter(detail, dynamoDB, CONSOLE_LOG_TRANSCRIPT_FLAG);
+                List<TranscriptionPublisher> publishers = Arrays.asList(new WebSocketTranscriptionPublisher(dynamoDB, detail, getAWSCredentials()),
+                        new DynamoDBTranscriptionPublisher(detail, dynamoDB, CONSOLE_LOG_TRANSCRIPT_FLAG));
+
                 CompletableFuture<Void> result = client.startStreamTranscription(
                         // since we're definitely working with telephony audio, we know that's 8 kHz
                         getRequest(8000),
                         new KVSAudioStreamPublisher(streamingMkvReader, transactionId, fileOutputStream, tagProcessor,
                                 fragmentVisitor, this.shouldWriteAudioToFile),
-                        new StreamTranscriptionBehaviorImpl(segmentWriter));
+                        new StreamTranscriptionBehaviorImpl(publishers));
 
                 // There is no timeout limit for transcription running on ECS. Since Lambda doesn't support function with more than 15 mins
                 // Set up a timeout here so that there is enough time for the audio to be uploaded in S3 before function got destoryed.
