@@ -1,6 +1,5 @@
 package com.amazonaws.kvstranscribestreaming.lambda;
 
-import com.amazonaws.kvstranscribestreaming.streaming.StreaingEventDetailValidator;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ecs.AmazonECS;
 import com.amazonaws.services.ecs.AmazonECSClientBuilder;
@@ -28,21 +27,6 @@ import java.util.Map;
 
 /**
  * Function that is used to start transcription container by sending RunTask request with streaming event detail and environment overrides.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so.
- * <p>
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 public class SendRunTaskRequestLambda implements RequestHandler<SQSEvent, String> {
     private static final Logger logger = LoggerFactory.getLogger(SendRunTaskRequestLambda.class);
@@ -92,8 +76,7 @@ public class SendRunTaskRequestLambda implements RequestHandler<SQSEvent, String
                 final StreamingStatusStartedDetail startedDetail = objectMapper.convertValue(eventDetail,
                         StreamingStatusStartedDetail.class);
 
-                StreaingEventDetailValidator.validateStreamingStartedEvent(startedDetail);
-                logger.info("[{}] Streaming STARTED event is valid, Streaming status {} , EventDetail: {}", transactionId, streamingStatus, startedDetail);
+                logger.info("[{}] Streaming status {} , EventDetail: {}", transactionId, streamingStatus, startedDetail);
 
                 AmazonECS client = AmazonECSClientBuilder.standard().withRegion(AWS_REGION.getName()).build();
 

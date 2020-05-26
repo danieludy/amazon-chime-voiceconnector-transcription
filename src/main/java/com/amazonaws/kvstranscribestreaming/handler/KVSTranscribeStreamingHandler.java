@@ -19,7 +19,6 @@ import com.amazonaws.kvstranscribestreaming.publisher.WebSocketTranscriptionPubl
 import com.amazonaws.kvstranscribestreaming.transcribe.KVSByteToAudioEventSubscription;
 import com.amazonaws.kvstranscribestreaming.transcribe.StreamTranscriptionBehaviorImpl;
 import com.amazonaws.kvstranscribestreaming.transcribe.TranscribeStreamingRetryClient;
-import com.amazonaws.kvstranscribestreaming.streaming.StreaingEventDetailValidator;
 
 import com.amazonaws.kvstranscribestreaming.utils.AudioUtils;
 import com.amazonaws.kvstranscribestreaming.utils.KVSUtils;
@@ -59,28 +58,9 @@ import java.util.concurrent.TimeoutException;
 /**
  * Demonstrate Amazon VoiceConnectors's real-time transcription feature using
  * AWS Kinesis Video Streams and AWS Transcribe. The data flow is :
- * <p>
+ *
  * Amazon CloudWatch Events => Amazon SQS => AWS Lambda => AWS Transcribe => AWS
  * DynamoDB & S3
- *
- * <p>
- * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * </p>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so.
- * <p>
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 public class KVSTranscribeStreamingHandler {
 
@@ -128,8 +108,7 @@ public class KVSTranscribeStreamingHandler {
                 final StreamingStatusStartedDetail streamingStatusStartedDetail = objectMapper.convertValue(eventDetail,
                         StreamingStatusStartedDetail.class);
 
-                StreaingEventDetailValidator.validateStreamingStartedEvent(streamingStatusStartedDetail);
-                logger.info("[{}] Streaming STARTED event is valid, Streaming status {} , EventDetail: {}", transactionId, streamingStatus, streamingStatusStartedDetail);
+                logger.info("[{}] Streaming status {} , EventDetail: {}", transactionId, streamingStatus, streamingStatusStartedDetail);
                 startKVSToTranscribeStreaming(streamingStatusStartedDetail);
             }
 

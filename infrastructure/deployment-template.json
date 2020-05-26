@@ -381,7 +381,7 @@
           }
         },
         "Runtime": "java11",
-        "MemorySize": 256,
+        "MemorySize": 512,
         "Timeout": 10,
         "ProvisionedConcurrencyConfig" : {
           "ProvisionedConcurrentExecutions" : 2
@@ -826,7 +826,7 @@
           ]
         },
         "Runtime": "java11",
-        "MemorySize": 256,
+        "MemorySize": 512,
         "Timeout": 10,
         "ProvisionedConcurrencyConfig" : {
           "ProvisionedConcurrentExecutions" : 2
