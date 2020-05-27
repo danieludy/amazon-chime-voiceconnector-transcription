@@ -333,7 +333,6 @@
       "Condition": "CreateECS",
       "Type": "AWS::Serverless::Function",
       "Properties": {
-        "AutoPublishAlias": "Provisioned",
         "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
         "Environment": {
           "Variables": {
@@ -382,10 +381,7 @@
         },
         "Runtime": "java11",
         "MemorySize": 512,
-        "Timeout": 10,
-        "ProvisionedConcurrencyConfig" : {
-          "ProvisionedConcurrentExecutions" : 2
-        }
+        "Timeout": 10
       }
     },
     "Vpc": {
@@ -723,22 +719,14 @@
       "Properties": {
         "AttributeDefinitions": [
           {
-            "AttributeName": "FromNumber",
-            "AttributeType": "S"
-          },
-          {
-            "AttributeName": "ToNumber",
+            "AttributeName": "Number",
             "AttributeType": "S"
           }
         ],
         "KeySchema": [
           {
-            "AttributeName": "FromNumber",
+            "AttributeName": "Number",
             "KeyType": "HASH"
-          },
-          {
-            "AttributeName": "ToNumber",
-            "KeyType": "RANGE"
           }
         ],
         "ProvisionedThroughput": {
@@ -746,6 +734,28 @@
           "WriteCapacityUnits": "5"
         },
         "TableName": "TranscriptionWebsocketMappingTable"
+      }
+    },
+    "TranscriptionWebsocketConnectionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "ConnectionId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "ConnectionId",
+            "KeyType": "HASH"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": "5",
+          "WriteCapacityUnits": "5"
+        },
+        "TableName": "TranscriptionWebsocketConnectionTable"
       }
     },
     "TranscriptionWebSocketIntegrationFunctionRole": {
@@ -808,12 +818,14 @@
     "TranscriptionWebSocketIntegrationFunction": {
       "Type": "AWS::Serverless::Function",
       "Properties": {
-        "AutoPublishAlias": "Provisioned",
         "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
         "Environment": {
           "Variables": {
             "WEB_SOCKET_MAPPING_TABLE": {
               "Ref": "TranscriptionWebsocketMappingTable"
+            },
+            "WEB_SOCKET_CONNECTION_TABLE": {
+              "Ref": "TranscriptionWebsocketConnectionTable"
             },
             "TRANSCRIBE_ROUTE_KEY": "transcribe"
           }
@@ -827,10 +839,7 @@
         },
         "Runtime": "java11",
         "MemorySize": 512,
-        "Timeout": 10,
-        "ProvisionedConcurrencyConfig" : {
-          "ProvisionedConcurrentExecutions" : 2
-        }
+        "Timeout": 10
       }
     },
     "TranscriptionWebSocketIntegrationRole": {

@@ -5,7 +5,6 @@ import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.apigatewaymanagementapi.AmazonApiGatewayManagementApi;
 import com.amazonaws.services.apigatewaymanagementapi.AmazonApiGatewayManagementApiClientBuilder;
-import com.amazonaws.services.apigatewaymanagementapi.model.AmazonApiGatewayManagementApiException;
 import com.amazonaws.services.apigatewaymanagementapi.model.GoneException;
 import com.amazonaws.services.apigatewaymanagementapi.model.PostToConnectionRequest;
 import com.amazonaws.services.apigatewaymanagementapi.model.PostToConnectionResult;
@@ -22,7 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.util.List;
 
-import static com.amazonaws.kvstranscribestreaming.constants.WebSockerMappingDDBConstants.*;
+import static com.amazonaws.kvstranscribestreaming.constants.WebSocketMappingDDBConstants.*;
 
 /**
  * Implemention of publisher to transmit transcription from backend to client through API Gateway web socket.
@@ -77,7 +76,7 @@ public class WebSocketTranscriptionPublisher implements TranscriptionPublisher {
                     logger.info("{} transcription event is {}", WEB_SOCKET_PUBLISHER_PREFIX, event.toString());
 
                     if(getConnectionId() == null) {
-                        logger.info("{} connection id is null.", WEB_SOCKET_PUBLISHER_PREFIX);
+                        logger.info("{} connection id is null. Waiting for updating connection Id", WEB_SOCKET_PUBLISHER_PREFIX);
                         return;
                     }
                     PostToConnectionRequest request = new PostToConnectionRequest().withConnectionId(this.connectionId).withData(StandardCharsets.UTF_8.encode(buildTranscription(result)));
@@ -101,7 +100,7 @@ public class WebSocketTranscriptionPublisher implements TranscriptionPublisher {
     @Override
     public void publishDone() {
         if(getConnectionId() == null) {
-            logger.info("{} connection id is null.", WEB_SOCKET_PUBLISHER_PREFIX);
+            logger.info("{} failed to get the connection id ", WEB_SOCKET_PUBLISHER_PREFIX);
             return;
         }
 
@@ -119,18 +118,32 @@ public class WebSocketTranscriptionPublisher implements TranscriptionPublisher {
 
     private String getConnectionId() {
         if(this.connectionId == null) {
-            GetItemSpec spec = new GetItemSpec()
-                    .withPrimaryKey(FROM_NUMBER, detail.getFromNumber(), TO_NUMBER, detail.getToNumber())
+            GetItemSpec fromNumberSpec = new GetItemSpec()
+                    .withPrimaryKey(NUMBER, detail.getFromNumber())
                     .withConsistentRead(true)
                     .withProjectionExpression(CONNECTION_ID);
 
-            Item item = getDDBClient().getTable(WEBSOCKET_MAPPING_TABLE_NAME).getItem(spec);
-            if (item.hasAttribute(CONNECTION_ID)) {
-                this.connectionId = (String) item.get(CONNECTION_ID);
-                logger.info("{} connection is established with id {}, starting transmission", WEB_SOCKET_PUBLISHER_PREFIX, this.connectionId);
-            } else {
-                logger.info("{} cannot find connection id in dynamodb table. ", WEB_SOCKET_PUBLISHER_PREFIX);
+            GetItemSpec toNumberSpec = new GetItemSpec()
+                    .withPrimaryKey(NUMBER, detail.getToNumber())
+                    .withConsistentRead(true)
+                    .withProjectionExpression(CONNECTION_ID);
+
+            Item fromNumberItem = getDDBClient().getTable(WEBSOCKET_MAPPING_TABLE_NAME).getItem(fromNumberSpec),
+                    toNumberItem = getDDBClient().getTable(WEBSOCKET_MAPPING_TABLE_NAME).getItem(toNumberSpec);
+
+            if (fromNumberItem != null && fromNumberItem.hasAttribute(CONNECTION_ID)) {
+                this.connectionId = (String) fromNumberItem.get(CONNECTION_ID);
+                logger.info("{} connection is associated with from number {} and id {}, starting transmission", WEB_SOCKET_PUBLISHER_PREFIX, detail.getFromNumber(), this.connectionId);
+                return this.connectionId;
             }
+
+            if (toNumberItem != null && toNumberItem.hasAttribute(CONNECTION_ID)) {
+                this.connectionId = (String) toNumberItem.get(CONNECTION_ID);
+                logger.info("{} connection is associated with to number {} and id {}, starting transmission", WEB_SOCKET_PUBLISHER_PREFIX, detail.getToNumber(), this.connectionId);
+                return this.connectionId;
+            }
+
+            logger.info("{} cannot get connection id associated with number {} or number {} in dynamodb table. ", WEB_SOCKET_PUBLISHER_PREFIX, detail.getFromNumber(), detail.getToNumber());
         }
 
         return this.connectionId;
