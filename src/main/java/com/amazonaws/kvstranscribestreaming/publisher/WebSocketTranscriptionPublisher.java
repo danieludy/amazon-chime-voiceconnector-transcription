@@ -158,12 +158,13 @@ public class WebSocketTranscriptionPublisher implements TranscriptionPublisher {
         nf.setMinimumFractionDigits(3);
         nf.setMaximumFractionDigits(3);
 
+        String callerLabel = String.format("Caller(%s)", detail.getFromNumber()), calleeLabel = String.format("Callee(%s)", detail.getToNumber());
         return String.format("Thread %s %d: [%s, %s] %s - %s",
                 Thread.currentThread().getName(),
                 System.currentTimeMillis(),
                 nf.format(result.startTime()),
                 nf.format(result.endTime()),
-                this.detail.getIsCaller() == Boolean.TRUE ? "spk_0" : "spk_1",
+                this.detail.getIsCaller() == Boolean.TRUE ? callerLabel : calleeLabel,
                 result.alternatives().get(0).transcript());
     }
 }

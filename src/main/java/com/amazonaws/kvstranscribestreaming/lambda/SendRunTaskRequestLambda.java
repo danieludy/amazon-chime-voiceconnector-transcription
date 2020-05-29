@@ -44,6 +44,8 @@ public class SendRunTaskRequestLambda implements RequestHandler<SQSEvent, String
     private static final String TRANSCRIBE_API_GATEWAY_APIID = System.getenv("TRANSCRIBE_API_GATEWAY_APIID");
     private static final String TRANSCRIBE_API_GATEWAY_STAGE = System.getenv("TRANSCRIBE_API_GATEWAY_STAGE");
 
+    private static final AmazonECS ecsClient = AmazonECSClientBuilder.standard().withRegion(AWS_REGION.getName()).build();
+
     @Override
     public String handleRequest(SQSEvent event, Context context) {
         try {
@@ -78,8 +80,6 @@ public class SendRunTaskRequestLambda implements RequestHandler<SQSEvent, String
 
                 logger.info("[{}] Streaming status {} , EventDetail: {}", transactionId, streamingStatus, startedDetail);
 
-                AmazonECS client = AmazonECSClientBuilder.standard().withRegion(AWS_REGION.getName()).build();
-
                 List<String> commandOverride = Arrays.asList("-e", sqsMessage.getBody());
                 List<KeyValuePair> environmentOverride = Arrays.asList(
                         new KeyValuePair().withName("IS_TRANSCRIBE_ENABLED").withValue(IS_TRANSCRIBE_ENABLED),
@@ -90,7 +90,7 @@ public class SendRunTaskRequestLambda implements RequestHandler<SQSEvent, String
                         new KeyValuePair().withName("TRANSCRIBE_API_GATEWAY_STAGE").withValue(TRANSCRIBE_API_GATEWAY_STAGE)
                 );
                 ContainerOverride containerOverride = new ContainerOverride().withName(CONTAINER_NAME).withCommand(commandOverride).withEnvironment(environmentOverride);
-                RunTaskResult result = client.runTask(new RunTaskRequest()
+                RunTaskResult result = ecsClient.runTask(new RunTaskRequest()
                         .withCluster(CLUSTER_NAME)
                         .withTaskDefinition(TASK_DEFINITION)
                         .withLaunchType(LaunchType.EC2)

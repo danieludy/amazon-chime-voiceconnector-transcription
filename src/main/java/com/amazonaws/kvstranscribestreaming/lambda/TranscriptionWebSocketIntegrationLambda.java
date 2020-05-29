@@ -46,6 +46,10 @@ public class TranscriptionWebSocketIntegrationLambda implements RequestHandler<A
     private static final String TRANSCRIBE_ROUTE_KEY = System.getenv("TRANSCRIBE_ROUTE_KEY");
     private static final String DISCONNECT_ROUTE_KEY = "$disconnect";
     private static final Regions AWS_REGION = Regions.fromName(System.getenv("AWS_REGION"));
+
+    private static final DynamoDB dynamoDB = new DynamoDB(
+            AmazonDynamoDBClientBuilder.standard().withRegion(AWS_REGION.getName()).build());
+
     @Override
     public APIGatewayV2WebSocketResponse handleRequest(APIGatewayV2WebSocketEvent requestEvent, Context context) {
         try {
@@ -64,7 +68,6 @@ public class TranscriptionWebSocketIntegrationLambda implements RequestHandler<A
                 return responseEvent;
             }
 
-            DynamoDB dynamoDB = new DynamoDB(AmazonDynamoDBClientBuilder.standard().withRegion(AWS_REGION.getName()).build());
             Table mappingTable = dynamoDB.getTable(WEB_SOCKET_MAPPING_TABLE);
             Table connectionTable = dynamoDB.getTable(WEB_SOCKET_CONNECTION_TABLE);
 
