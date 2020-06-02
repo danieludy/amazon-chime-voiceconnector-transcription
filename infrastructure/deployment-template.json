@@ -333,6 +333,10 @@
       "Condition": "CreateECS",
       "Type": "AWS::Serverless::Function",
       "Properties": {
+        "AutoPublishAlias": "Provisioned",
+        "ProvisionedConcurrencyConfig" : {
+          "ProvisionedConcurrentExecutions" : 2
+        },
         "CodeUri": "./amazon-chime-voiceconnector-recordandtranscribe.zip",
         "Environment": {
           "Variables": {
@@ -380,7 +384,7 @@
           }
         },
         "Runtime": "java11",
-        "MemorySize": 512,
+        "MemorySize": 1024,
         "Timeout": 10
       }
     },
