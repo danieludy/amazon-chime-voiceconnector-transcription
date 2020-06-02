@@ -2,8 +2,6 @@ package com.amazonaws.kvstranscribestreaming.docker;
 
 import com.amazonaws.kvstranscribestreaming.constants.Platform;
 import com.amazonaws.kvstranscribestreaming.handler.KVSTranscribeStreamingHandler;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -21,9 +19,6 @@ import org.slf4j.LoggerFactory;
 public class KVSTranscribeStreamingDocker {
     private static final Logger logger = LoggerFactory.getLogger(KVSTranscribeStreamingDocker.class);
     private static final String DOCKER_KEY_PREFIX = "KVSTranscribeStreamingDocker:";
-    private static final ObjectMapper objectMapper = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
     public static void main(String[] args) {
         final KVSTranscribeStreamingHandler handler = new KVSTranscribeStreamingHandler(Platform.ECS);
         String eventBody = constructEventBody(args);
