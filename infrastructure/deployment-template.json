@@ -249,7 +249,8 @@
           "arn:aws:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess",
           "arn:aws:iam::aws:policy/AmazonTranscribeFullAccess",
           "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
-          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+          "arn:aws:iam::aws:policy/AmazonAPIGatewayInvokeFullAccess"
         ],
         "Policies": [
           {
@@ -598,7 +599,8 @@
           "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole",
           "arn:aws:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess",
           "arn:aws:iam::aws:policy/AmazonTranscribeFullAccess",
-          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+          "arn:aws:iam::aws:policy/AmazonAPIGatewayInvokeFullAccess"
         ],
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
