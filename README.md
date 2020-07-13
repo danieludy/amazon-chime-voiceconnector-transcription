@@ -1,5 +1,13 @@
 # Real-Time Transcription with Amazon Chime Voice Connector 
 
+[![GitHub stars](https://img.shields.io/github/stars/aws-samples/amazon-chime-voiceconnector-transcription?style=flat-square)](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/stargazers)
+![GitHub All Releases](https://img.shields.io/github/downloads/aws-samples/amazon-chime-voiceconnector-transcription/total?style=flat-square)
+![GitHub contributors](https://img.shields.io/github/contributors/aws-samples/amazon-chime-voiceconnector-transcription?style=flat-square)
+
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/aws-samples/amazon-chime-voiceconnector-transcription?style=flat-square)](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/releases/latest)
+[![GitHub commits since latest release (by date including pre-releases)](https://img.shields.io/github/commits-since/aws-samples/amazon-chime-voiceconnector-transcription/latest/master?include_prereleases&style=flat-square)](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/commits/master)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/y/aws-samples/amazon-chime-voiceconnector-transcription?style=flat-square)
+
 Making it easy to get started with Amazon Chime Voice Connector live audio streaming and real-time transcription using Amazon Transcribe.
 
 ## On this Page
