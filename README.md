@@ -1,5 +1,6 @@
 # Real-Time Transcription with Amazon Chime Voice Connector 
 
+![CircleCI](https://img.shields.io/circleci/build/github/aws-samples/amazon-chime-voiceconnector-transcription?style=flat-square)
 [![GitHub stars](https://img.shields.io/github/stars/aws-samples/amazon-chime-voiceconnector-transcription?style=flat-square)](https://github.com/aws-samples/amazon-chime-voiceconnector-transcription/stargazers)
 ![GitHub All Releases](https://img.shields.io/github/downloads/aws-samples/amazon-chime-voiceconnector-transcription/total?style=flat-square)
 ![GitHub contributors](https://img.shields.io/github/contributors/aws-samples/amazon-chime-voiceconnector-transcription?style=flat-square)
@@ -47,6 +48,10 @@ The Lambda code expects the Kinesis Video Stream details provided by the Amazon 
 As of this writing Amazon Transcribe supports real time transcription of British English (en-GB), US English (en-US), French (fr-FR), Canadian French (fr-CA); and US Spanish (es-US). See the Amazon Transcribe [streaming documentation](https://docs.aws.amazon.com/transcribe/latest/dg/streaming.html) for the latest supported languages.
 
 ## Container based
+![Docker Pulls](https://img.shields.io/docker/pulls/amazon/amazon-chime-voiceconnector-transcription?style=flat-square)
+![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/amazon/amazon-chime-voiceconnector-transcription?style=flat-square)
+![Docker Image Version (latest by date)](https://img.shields.io/docker/v/amazon/amazon-chime-voiceconnector-transcription?style=flat-square)
+
 With container based solution you can transcribe the calls longer then 15 min.
 
 ### Architecture Overview
