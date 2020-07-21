@@ -41,8 +41,6 @@ public class StreamingStatusStartedDetail implements StreamingStatusDetail {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String siprecMetadata;
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    private Sdp sdp;
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     private String fromNumber;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String toNumber;
