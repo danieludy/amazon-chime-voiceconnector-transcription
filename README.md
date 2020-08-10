@@ -164,14 +164,14 @@ aws s3api create-bucket --bucket source-us-east-1-<accountid> --region us-east-1
 
 Package local artifacts
 ```
-aws cloudformation package --template-file ./deployment-template.json --s3-bucket source-us-east-1-<accountid> --force-upload --use-json --output-template-file packaged.json
+aws cloudformation package --template-file deployment-template.json --s3-bucket source-us-east-1-<accountid> --force-upload --use-json --output-template-file packaged.json
 ```
 
 Deploy the package
 > :warning: **choose `SolutionType=LAMBDA` for Lambda based solution `SolutionType=ECS` for Container based solution**
 
 ```
-aws cloudformation deploy --template-file ./packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=<LAMBDA|ECS>
+aws cloudformation deploy --template-file packaged.json --stack-name CallAudioDemo --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides SolutionType=<LAMBDA|ECS>
 ```
 
 Place test calls through Amazon Voice Connector and view transcripts in DynamoDB and recordings in S3.
