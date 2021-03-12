@@ -94,7 +94,9 @@
     "EventSQS": {
       "Type": "AWS::SQS::Queue",
       "Properties": {
-        "QueueName": "ChimeVoiceConnectorStreaming",
+        "QueueName": {
+          "Fn::Sub": "ChimeVCStreamingTranscription-${AWS::Region}-${AWS::AccountId}"
+        },
         "VisibilityTimeout": 1800
       }
     },
