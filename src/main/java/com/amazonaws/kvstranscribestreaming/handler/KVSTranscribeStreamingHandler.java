@@ -90,6 +90,7 @@ public class KVSTranscribeStreamingHandler {
     private static final ObjectMapper objectMapper = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
+    private String transactionId;
     public KVSTranscribeStreamingHandler(final Platform platform) {
         this.platform = platform;
     }
@@ -102,6 +103,7 @@ public class KVSTranscribeStreamingHandler {
 
             String streamingStatus = eventDetail.get("streamingStatus");
             String transactionId = eventDetail.get("transactionId");
+            this.transactionId = transactionId;
             logger.info("Received STARTED event");
 
             if (StreamingStatus.STARTED.name().equals(streamingStatus)) {
@@ -112,9 +114,9 @@ public class KVSTranscribeStreamingHandler {
                 startKVSToTranscribeStreaming(streamingStatusStartedDetail);
             }
 
-            logger.info("Finished processing request");
+            logger.info("[{}] Finished processing request", this.transactionId);
         } catch (Exception e) {
-            logger.error("KVS to Transcribe Streaming failed with: ", e);
+            logger.error("[{}] KVS to Transcribe Streaming failed with: ", this.transactionId, e);
             return "{ \"result\": \"Failed\" }";
         }
         return "{ \"result\": \"Success\" }";
@@ -138,7 +140,7 @@ public class KVSTranscribeStreamingHandler {
 
 
         Path saveAudioFilePath = Paths.get("/tmp",
-                transactionId + "_" + callId + "_" + DATE_FORMAT.format(new Date()) + ".raw");
+                transactionId + "_" + DATE_FORMAT.format(new Date()) + ".raw");
         FileOutputStream fileOutputStream = new FileOutputStream(saveAudioFilePath.toString());
 
         InputStream kvsInputStream = KVSUtils.getInputStreamFromKVS(streamArn, REGION, startFragmentNumber,
@@ -175,10 +177,10 @@ public class KVSTranscribeStreamingHandler {
             } catch (TimeoutException e) {
                 logger.debug("Timing out KVS to Transcribe Streaming after 900 sec");
             } catch (Exception e) {
-                logger.error("Error during streaming: ", e);
+                logger.error("[{}] Error during streaming: ", this.transactionId, e);
                 throw e;
-
             } finally {
+                // Upload the raw audio regardless of any exception thrown in the middle
                 if (this.shouldWriteAudioToFile) {
                     closeFileAndUploadRawAudio(kvsInputStream, fileOutputStream, saveAudioFilePath, transactionId, startTime);
                 }
@@ -201,8 +203,8 @@ public class KVSTranscribeStreamingHandler {
                         break;
                     }
                 }
-
             } finally {
+                // Upload the raw audio regardless of any exception thrown in the middle
                 closeFileAndUploadRawAudio(kvsInputStream, fileOutputStream, saveAudioFilePath, transactionId, startTime);
             }
         }
@@ -220,15 +222,19 @@ public class KVSTranscribeStreamingHandler {
     private void closeFileAndUploadRawAudio(InputStream kvsInputStream, FileOutputStream fileOutputStream,
             Path saveAudioFilePath, String transactionId, String startTime) throws IOException {
 
-        kvsInputStream.close();
-        fileOutputStream.close();
-
-        // Upload the Raw Audio file to S3
-        if (new File(saveAudioFilePath.toString()).length() > 0) {
-            AudioUtils.uploadRawAudio(REGION, RECORDINGS_BUCKET_NAME, RECORDINGS_KEY_PREFIX,
-                    saveAudioFilePath.toString(), transactionId, startTime, RECORDINGS_PUBLIC_READ_ACL, getAWSCredentials());
-        } else {
-            logger.info("Skipping upload to S3. Audio file has 0 bytes: " + saveAudioFilePath);
+        try {
+            kvsInputStream.close();
+            fileOutputStream.close();
+        } catch (IOException e) {
+            logger.error("[{}] Failed to close KVS or file streams due to ", this.transactionId, e);
+        } finally {
+            // Always upload the raw audio file to S3
+            if (new File(saveAudioFilePath.toString()).length() > 0) {
+                AudioUtils.uploadRawAudio(REGION, RECORDINGS_BUCKET_NAME, RECORDINGS_KEY_PREFIX,
+                        saveAudioFilePath.toString(), transactionId, startTime, RECORDINGS_PUBLIC_READ_ACL, getAWSCredentials());
+            } else {
+                logger.info("Skipping upload to S3. Audio file has 0 bytes: " + saveAudioFilePath);
+            }
         }
     }
 

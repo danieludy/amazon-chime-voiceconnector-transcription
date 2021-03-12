@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'com.bmuschko.docker-remote-api' version '6.4.0'
     id "io.freefair.lombok" version "5.0.1"
+    id "java-library"
 }
 
 import com.bmuschko.gradle.docker.tasks.image.Dockerfile
@@ -10,6 +11,16 @@ import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
 archivesBaseName = 'amazon-chime-voiceconnector-recordandtranscribe'
 repositories {
     mavenCentral()
+}
+
+java {
+    toolchain {
+        // By default, Gradle uses the same Java version for running Gradle itself and building JVM projects.
+        // It causes FUNCTION_ERROR_INIT_FAILURE when launching Lambda due to UnsupportedClassVersionError
+        // To match Java runtime version from Lambda, here we explicitly require gradle to compile with Jdk
+        // Gradle document: https://docs.gradle.org/current/userguide/toolchains.html
+        languageVersion = JavaLanguageVersion.of(11)
+    }
 }
 
 dependencies {
